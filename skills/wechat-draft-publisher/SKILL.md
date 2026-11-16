@@ -154,11 +154,8 @@ wechat-draft-publisher/
 ├── SKILL.md                # 本文件
 ├── publisher.py            # 核心发布脚本
 ├── scripts/                # 工具脚本
-│   ├── fix-wechat-style.py # HTML 优化器
-│   ├── optimize-html.py    # HTML 压缩工具
-│   ├── publish-workflow.sh # 完整工作流
-│   ├── install.sh          # 安装助手
-│   └── test.sh             # 测试脚本
+│   ├── install.sh          # 安装助手（依赖检查 + openwrite.py setup）
+│   └── test.sh             # 测试脚本（真实调用微信 API 创建测试草稿）
 ├── examples/               # 示例文件
 │   └── example.html        # HTML 示例
 └── README.md               # 详细英文文档
@@ -206,4 +203,3 @@ python publisher.py --interactive
 
 - **详细文档：** [README.md](README.md)（英文）
 - **安装指南：** [scripts/install.sh](scripts/install.sh)
-- **HTML 处理：** [scripts/fix-wechat-style.py](scripts/fix-wechat-style.py)

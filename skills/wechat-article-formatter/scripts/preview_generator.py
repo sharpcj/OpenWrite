@@ -1,183 +1,114 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""实时预览生成器：边写边看微信公众号排版效果。
+
+使用文件修改时间轮询（标准库，无额外依赖），修改 Markdown 后自动重新转换，
+刷新浏览器即可看到最新效果。底层能力脚本，不享受 openwrite.py 的七步状态检查。
 """
-Live Preview Generator for WeChat Articles
-实时预览生成器，支持边写边看效果
-"""
+from __future__ import annotations
 
 import argparse
-import sys
-import time
-from pathlib import Path
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
-from markdown_to_html import WeChatHTMLConverter
-import webbrowser
-import threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
-import os
+from pathlib import Path
+import sys
+import threading
+import time
+import webbrowser
 
-
-class MarkdownChangeHandler(FileSystemEventHandler):
-    """监听Markdown文件变化的处理器"""
-
-    def __init__(self, input_file: str, output_file: str, theme: str, auto_refresh: bool = True):
-        self.input_file = Path(input_file).absolute()
-        self.output_file = Path(output_file).absolute()
-        self.theme = theme
-        self.auto_refresh = auto_refresh
-        self.converter = WeChatHTMLConverter(theme=theme)
-        self.last_modified = 0
-
-        # 初次转换
-        self._convert()
-
-    def _convert(self):
-        """执行转换"""
-        try:
-            # 检查文件修改时间，避免重复转换
-            current_modified = self.input_file.stat().st_mtime
-            if current_modified == self.last_modified:
-                return
-
-            self.last_modified = current_modified
-
-            # 转换文件
-            self.converter.convert_file(str(self.input_file), str(self.output_file))
-
-            timestamp = time.strftime('%H:%M:%S')
-            print(f'[{timestamp}] ✅ 已更新预览: {self.output_file.name}')
-
-        except Exception as e:
-            timestamp = time.strftime('%H:%M:%S')
-            print(f'[{timestamp}] ❌ 转换失败: {e}')
-
-    def on_modified(self, event):
-        """文件修改时触发"""
-        if event.src_path == str(self.input_file):
-            self._convert()
+from markdown_to_html import convert_markdown
 
 
 class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
-    """静默的HTTP请求处理器（不打印访问日志）"""
+    """静默的 HTTP 请求处理器（不打印访问日志）。"""
 
     def log_message(self, format, *args):
-        """覆盖日志方法，静默处理"""
         pass
 
 
-def start_http_server(directory: Path, port: int = 8000):
-    """启动HTTP服务器"""
-    os.chdir(directory)
-    server = HTTPServer(('localhost', port), QuietHTTPRequestHandler)
-    print(f'🌐 本地服务器已启动: http://localhost:{port}')
-    server.serve_forever()
+def convert_once(input_path: Path, output_file: Path, theme: str) -> None:
+    closing_path = input_path.parent / 'closing.md'
+    closing_md = closing_path.read_text(encoding='utf-8') if closing_path.exists() else None
+    html = convert_markdown(input_path.read_text(encoding='utf-8'), theme, closing_md=closing_md)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(html, encoding='utf-8')
 
 
-def main():
-    """命令行入口"""
+def watch_and_convert(input_path: Path, output_file: Path, theme: str, stop: threading.Event) -> None:
+    """轮询文件修改时间，变化时重新转换；不依赖第三方文件监听库。"""
+    last_modified = None
+    while not stop.is_set():
+        try:
+            modified = input_path.stat().st_mtime
+            if modified != last_modified:
+                last_modified = modified
+                convert_once(input_path, output_file, theme)
+                print(f'[{time.strftime("%H:%M:%S")}] 已更新预览: {output_file.name}')
+        except Exception as exc:
+            print(f'[{time.strftime("%H:%M:%S")}] 转换失败: {exc}', file=sys.stderr)
+        stop.wait(1)
+
+
+def main() -> int:
     parser = argparse.ArgumentParser(
-        description='实时预览Markdown文章的微信公众号效果',
+        description='实时预览 Markdown 文章的微信公众号效果',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 示例用法:
-  # 实时预览，自动监听文件变化
   python preview_generator.py --input article.md
-
-  # 指定主题
-  python preview_generator.py --input article.md --theme minimal
-
-  # 指定输出目录和端口
+  python preview_generator.py --input article.md --theme grace
   python preview_generator.py --input article.md --output preview/ --port 8080
 
 工作原理:
-  1. 首次运行时转换Markdown为HTML
+  1. 首次运行时转换 Markdown 为 HTML
   2. 在浏览器中打开预览
-  3. 启动文件监听，当Markdown文件修改时自动重新转换
-  4. 刷新浏览器即可看到最新效果
-
-使用技巧:
-  - 使用支持自动刷新的浏览器扩展（如Live Server）
-  - 或手动刷新浏览器查看最新效果
-  - 按Ctrl+C停止预览服务
-        '''
-    )
-
-    parser.add_argument('-i', '--input', required=True, help='输入的Markdown文件路径')
+  3. 轮询文件修改时间，变化时自动重新转换
+  4. 刷新浏览器即可看到最新效果；按 Ctrl+C 停止
+        ''')
+    parser.add_argument('-i', '--input', required=True, help='输入的 Markdown 文件路径')
     parser.add_argument('-o', '--output', help='输出目录（默认：./preview/）')
-    parser.add_argument('-t', '--theme', default='tech',
-                        choices=['tech', 'minimal', 'business'],
-                        help='选择主题样式（默认：tech）')
-    parser.add_argument('-p', '--port', type=int, default=8000,
-                        help='HTTP服务器端口（默认：8000）')
-    parser.add_argument('--no-browser', action='store_true',
-                        help='不自动打开浏览器')
-
+    parser.add_argument('-t', '--theme', default='default', help='YAML 主题名（默认：default）')
+    parser.add_argument('-p', '--port', type=int, default=8000, help='HTTP 服务器端口（默认：8000）')
+    parser.add_argument('--no-browser', action='store_true', help='不自动打开浏览器')
     args = parser.parse_args()
 
     try:
-        # 确定输出路径
-        input_path = Path(args.input).absolute()
+        input_path = Path(args.input).expanduser().resolve()
         if not input_path.exists():
             raise FileNotFoundError(f'输入文件不存在: {args.input}')
-
         output_dir = Path(args.output) if args.output else Path('./preview')
         output_dir.mkdir(parents=True, exist_ok=True)
-
         output_file = output_dir / f'{input_path.stem}.html'
 
-        print('🚀 启动实时预览服务...')
-        print(f'📄 监听文件: {input_path}')
-        print(f'📁 输出目录: {output_dir}')
-        print(f'🎨 使用主题: {args.theme}')
-        print()
+        print(f'监听文件: {input_path}')
+        print(f'输出目录: {output_dir}；主题: {args.theme}')
+        convert_once(input_path, output_file, args.theme)
 
-        # 创建文件监听处理器
-        event_handler = MarkdownChangeHandler(
-            input_file=str(input_path),
-            output_file=str(output_file),
-            theme=args.theme
-        )
-
-        # 启动HTTP服务器（在后台线程）
-        server_thread = threading.Thread(
-            target=start_http_server,
-            args=(output_dir, args.port),
-            daemon=True
-        )
+        server = HTTPServer(('localhost', args.port), QuietHTTPRequestHandler)
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
         server_thread.start()
+        print(f'本地服务器已启动: http://localhost:{args.port}')
 
-        # 在浏览器中打开预览
         if not args.no_browser:
-            time.sleep(0.5)  # 等待服务器启动
             preview_url = f'http://localhost:{args.port}/{output_file.name}'
             webbrowser.open(preview_url)
-            print(f'🌐 已在浏览器中打开预览: {preview_url}')
+            print(f'已在浏览器中打开预览: {preview_url}')
 
-        print()
-        print('👀 正在监听文件变化...')
-        print('💡 提示：修改Markdown文件后，刷新浏览器即可看到最新效果')
-        print('⏹️  按Ctrl+C停止服务')
-        print()
-
-        # 启动文件监听
-        observer = Observer()
-        observer.schedule(event_handler, path=str(input_path.parent), recursive=False)
-        observer.start()
-
+        print('正在监听文件变化；修改 Markdown 后刷新浏览器即可。按 Ctrl+C 停止。')
+        stop = threading.Event()
+        watcher = threading.Thread(target=watch_and_convert,
+                                   args=(input_path, output_file, args.theme, stop), daemon=True)
+        watcher.start()
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            observer.stop()
-            print('\n👋 预览服务已停止')
-
-        observer.join()
-
-    except Exception as e:
-        print(f'❌ 启动失败: {e}', file=sys.stderr)
-        sys.exit(1)
+            stop.set()
+            server.shutdown()
+            print('\n预览服务已停止')
+        return 0
+    except Exception as exc:
+        print(f'错误: 启动失败: {exc}', file=sys.stderr)
+        return 1
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

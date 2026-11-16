@@ -35,20 +35,20 @@ Markdown文章
 **选择合适的主题**:
 
 ```bash
-# 技术文章 - 使用tech主题
-python scripts/markdown_to_html.py --input article.md --theme tech
+# 科技、商业、通用 - default（经典蓝）
+python scripts/markdown_to_html.py --input article.md --theme default
 
-# 通用文章 - 使用minimal主题
-python scripts/markdown_to_html.py --input article.md --theme minimal
+# 文化、美学 - grace（优雅紫）
+python scripts/markdown_to_html.py --input article.md --theme grace
 
-# 商业报告 - 使用business主题
-python scripts/markdown_to_html.py --input article.md --theme business
+# 自媒体、创业 - modern（暖橙）；思想深度 - simple（极简黑）
+python scripts/markdown_to_html.py --input article.md --theme modern
 ```
 
 **带预览**:
 ```bash
 # 转换后自动在浏览器打开预览
-python scripts/markdown_to_html.py --input article.md --theme tech --preview
+python scripts/markdown_to_html.py --input article.md --theme default --preview
 ```
 
 ### 步骤2: 本地预览检查

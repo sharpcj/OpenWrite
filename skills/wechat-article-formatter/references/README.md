@@ -206,7 +206,7 @@
 ### 内部文档
 - [SKILL.md](../SKILL.md) - 主技能文档
 - [EXAMPLES.md](../EXAMPLES.md) - 使用示例（3个完整案例）
-- [templates/](../templates/) - CSS主题模板
+- [themes/](../themes/) - YAML 主题
 - [scripts/](../scripts/) - 转换脚本
 
 ### 外部资源

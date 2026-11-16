@@ -504,6 +504,25 @@ def _wrap_document(body_html: str, styles: dict) -> str:
     )
 
 
+# ── 转换入口 ──────────────────────────────────────────────────
+
+def convert_markdown(md_text: str, theme_name: str = "default", overrides: dict | None = None,
+                     preformat: bool = True, closing_md: str | None = None) -> str:
+    """将 Markdown 文本转换为微信兼容的 inline-style HTML。
+
+    供 CLI、批量转换与实时预览共用；closing_md 为可选文末区块文本。
+    """
+    if preformat:
+        md_text = _preformat_markdown(md_text)
+    theme = _load_theme(theme_name)
+    styles = _build_styles(theme, overrides)
+    body_html = _md_to_html(md_text, styles)
+    if closing_md:
+        closing_html = _md_to_html(closing_md, styles)
+        body_html = f'{body_html}\n\n<div style="margin-top:1.5em"></div>\n{closing_html}'
+    return _wrap_document(body_html, styles)
+
+
 # ── CLI ──────────────────────────────────────────────────────
 
 def main():
@@ -544,31 +563,23 @@ def main():
 
     md_text = input_path.read_text(encoding="utf-8")
 
-    if not args.no_preformat:
-        md_text = _preformat_markdown(md_text)
-        _info("Markdown 预格式化完成（中英文间距、引号、空行）")
-
-    theme = _load_theme(args.theme)
-
     overrides = {}
     if args.color:
         overrides["primary-color"] = args.color
     if args.font_size:
         overrides["font-size"] = args.font_size
 
-    _info(f"主题: {args.theme}")
-    styles = _build_styles(theme, overrides)
-    body_html = _md_to_html(md_text, styles)
-
-    # 文末 closing.md
+    closing_md = None
     closing_md_path = input_path.parent / "closing.md"
     if closing_md_path.exists():
         closing_md = closing_md_path.read_text(encoding="utf-8")
-        closing_html = _md_to_html(closing_md, styles)
-        body_html = f'{body_html}\n\n<div style="margin-top:1.5em"></div>\n{closing_html}'
         _info(f"已追加文末区块: {closing_md_path}")
 
-    full_html = _wrap_document(body_html, styles)
+    _info(f"主题: {args.theme}")
+    full_html = convert_markdown(md_text, args.theme, overrides,
+                                 preformat=not args.no_preformat, closing_md=closing_md)
+    if not args.no_preformat:
+        _info("Markdown 预格式化完成（中英文间距、引号、空行）")
 
     output_path = Path(args.output) if args.output else input_path.with_suffix(".html")
     output_path.parent.mkdir(parents=True, exist_ok=True)
