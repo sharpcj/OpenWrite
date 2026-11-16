@@ -191,13 +191,62 @@ def requests(article: Path) -> list:
     covers = [item for item in images if item['role'] == 'cover']
     if len(covers) != 1 or covers[0]['id'] != profile['cover']['id']:
         raise ValueError(f'需求清单必须有且仅有一项 id 为 {profile["cover"]["id"]} 的封面')
+    if covers[0]['output'] != profile['cover']['output']:
+        raise ValueError(f'{profile["label"]}封面输出应为 {profile["cover"]["output"]}')
     rule = profile['content_images']
     content = [item for item in images if item['role'] == 'content']
     if rule['required'] and len(content) < rule['min']:
         raise ValueError(f'{profile["label"]}图文至少需要 {rule["min"]} 张正文卡片')
     if rule['max'] is not None and len(content) > rule['max']:
         raise ValueError(f'{profile["label"]}正文卡片最多 {rule["max"]} 张')
+    if profile['rendered_artifact'] is None:
+        orders = []
+        for item in content:
+            order = item.get('order')
+            if type(order) is not int or order < 2:
+                raise ValueError('组图正文卡片需有 order（从 2 开始的整数）；封面固定为第 1 张')
+            orders.append(order)
+        if len(set(orders)) != len(orders):
+            raise ValueError('组图卡片的 order 不可重复')
     return images
+
+
+def card_order(article: Path) -> list:
+    """Upload order for a card set: cover first, then content cards by order."""
+    images = requests(article)
+    cover = next(item for item in images if item['role'] == 'cover')
+    content = sorted((item for item in images if item['role'] == 'content'),
+                     key=lambda item: item['order'])
+    return [cover['output']] + [item['output'] for item in content]
+
+
+def note_parts(article: Path) -> dict:
+    """Split note copy into title, description and topics.
+
+    Convention: the H1 is the title; an optional trailing `话题：a b c` line
+    carries tags. Everything else is the description.
+    """
+    text = body(article / 'note.md')
+    lines = text.splitlines()
+    title = lines[0].strip()
+    if not title.startswith('# '):
+        raise ValueError('note.md 首行必须是 # 标题')
+    title = title[2:].strip()
+    topics = []
+    rest = lines[1:]
+    for index in range(len(rest) - 1, -1, -1):
+        line = rest[index].strip()
+        if not line:
+            continue
+        match = re.fullmatch(r'话题[:：]\s*(.+)', line)
+        if match:
+            topics = [tag for tag in re.split(r'[\s,，、]+', match.group(1)) if tag]
+            rest = rest[:index]
+        break
+    desc = '\n'.join(rest).strip()
+    if not desc:
+        raise ValueError('note.md 需要有正文文案')
+    return {'title': title, 'desc': desc, 'topics': topics}
 
 
 def image_proof(article: Path, request: dict) -> dict:
@@ -238,6 +287,9 @@ def final_text(article: Path) -> str:
     text = body(article / 'draft.md')
     images = requests(article)
     content_decision(article, images)
+    if platforms.for_state(load(article))['rendered_artifact'] is None:
+        # 组图平台：卡片即内容本体，笔记文案不嵌图，顺序由发布清单表达。
+        return text.rstrip() + '\n'
     insertions = []
     for request in images:
         if request['role'] != 'content':
@@ -271,14 +323,22 @@ def proof(article: Path, step: str) -> str:
         text = body(article / 'draft.md')
         if re.search(r'!\[[^\]]*\]\(', text):
             raise ValueError('draft.md 只保存正文，不嵌入图片；图片由最终步骤整合')
-        if not outline_required(load(article)):
-            return file_hash(article / 'draft.md')
+        state = load(article)
+        extra = {}
+        if platforms.for_state(state)['rendered_artifact'] is None:
+            # 卡片稿是第三步产物：改文案必须让已渲染卡片与下游一起失效。
+            body(article / 'cards.md')
+            extra['cards'] = file_hash(article / 'cards.md')
+        if not outline_required(state):
+            if not extra:
+                return file_hash(article / 'draft.md')
+            return digest({'draft': file_hash(article / 'draft.md'), **extra})
         plan = outline(article)
         heading = text.splitlines()[0].strip()
         if heading != f"# {plan['chosen_title']}":
             raise ValueError('draft.md 的标题必须与用户确认的标题一致；换标题请先更新 outline.md 并重新确认')
         return digest({'draft': file_hash(article / 'draft.md'),
-                       'outline': plan['outline_hash'], 'title': plan['chosen_title']})
+                       'outline': plan['outline_hash'], 'title': plan['chosen_title'], **extra})
     if step == 'cover':
         cover = next(item for item in requests(article) if item['role'] == 'cover')
         return digest(image_proof(article, cover))
@@ -421,7 +481,7 @@ def publish_metadata(article: Path, state: dict) -> dict:
     return {'title': state['title'], 'author': author, 'digest': ''}
 
 
-def check_publishable(article: Path, state: dict, html_path: Path) -> dict:
+def check_publishable(article: Path, state: dict, html_path: Path = None) -> dict:
     """Pre-upload checks so the writing stage delivers a genuinely publishable artifact."""
     from PIL import Image
     profile = platforms.for_state(state)
@@ -458,7 +518,10 @@ def check_publishable(article: Path, state: dict, html_path: Path) -> dict:
         except Exception:
             problems.append('封面无法解码')
 
-    html = html_path.read_text(encoding='utf-8') if html_path.is_file() else ''
+    if profile['rendered_artifact'] is None:
+        return check_card_set(article, state, title, cover_bytes, problems)
+
+    html = html_path.read_text(encoding='utf-8') if html_path and html_path.is_file() else ''
     if not html.strip():
         problems.append('排版结果为空')
     if profile['checks']['code_blocks_converted'] and '<pre' in html.lower():
@@ -477,13 +540,54 @@ def check_publishable(article: Path, state: dict, html_path: Path) -> dict:
             'html_chars': len(html), 'local_images': local_images}
 
 
+def check_card_set(article: Path, state: dict, title: str, cover_bytes: int, problems: list) -> dict:
+    """组图平台：逐张校验尺寸与顺序，并核对笔记文案。"""
+    from PIL import Image
+    profile = platforms.for_state(state)
+    try:
+        parts = note_parts(article)
+    except (OSError, ValueError) as exc:
+        problems.append(str(exc))
+        parts = {'title': '', 'desc': '', 'topics': []}
+    if parts['title'] and parts['title'] != title:
+        problems.append('note.md 标题与已确认标题不一致')
+    expected = {
+        profile['cover']['output']: (profile['cover']['width'], profile['cover']['height']),
+    }
+    for item in requests(article):
+        if item['role'] == 'content':
+            expected[item['output']] = (item['width'], item['height'])
+    for name, size in expected.items():
+        path = article / name
+        if not path.is_file():
+            problems.append(f'缺少卡片 {name}')
+            continue
+        try:
+            with Image.open(path) as picture:
+                picture.load()
+                if picture.format != 'PNG':
+                    problems.append(f'{name} 必须是 PNG')
+                elif picture.size != size:
+                    problems.append(f'{name} 尺寸 {picture.size} 与需求 {size} 不符')
+        except Exception:
+            problems.append(f'{name} 无法解码')
+    if problems:
+        raise ValueError('产物尚不可发布：\n  - ' + '\n  - '.join(problems))
+    return {'title_chars': len(title), 'cover_bytes': cover_bytes,
+            'cards': len(expected), 'desc_chars': len(parts['desc']), 'topics': len(parts['topics'])}
+
+
 def build_manifest(article: Path, state: dict, theme: str, preformat: bool, checks: dict) -> dict:
     profile = platforms.for_state(state)
-    return {'version': 1, 'platform': preferences.task_platform(state),
-            **publish_metadata(article, state),
-            'theme': theme, 'preformat': bool(preformat), 'cover': profile['cover']['output'],
-            'content_images': [item['output'] for item in requests(article) if item['role'] == 'content'],
-            'files': publishable_files(article), 'checks': checks}
+    manifest = {'version': 1, 'platform': preferences.task_platform(state),
+                **publish_metadata(article, state),
+                'theme': theme, 'preformat': bool(preformat), 'cover': profile['cover']['output'],
+                'content_images': [item['output'] for item in requests(article) if item['role'] == 'content'],
+                'files': publishable_files(article), 'checks': checks}
+    if profile['rendered_artifact'] is None:
+        parts = note_parts(article)
+        manifest.update({'desc': parts['desc'], 'topics': parts['topics'], 'images': card_order(article)})
+    return manifest
 
 
 def complete_format(article: Path, theme: str, preformat: bool, checks: dict) -> dict:

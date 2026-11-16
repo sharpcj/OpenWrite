@@ -27,6 +27,8 @@ REGISTRY = {
         'renderer': 'wechat-article-formatter',
         'publisher': 'wechat-draft-publisher',
         'publisher_entry': 'publisher.py',
+        'publish_implemented': True,
+        'format_label': '排版并保存可发布产物',
         # 长文形态：Markdown 整合后转 inline-style HTML。
         'markdown_artifact': 'article.md',
         'rendered_artifact': 'article.html',
@@ -47,12 +49,15 @@ REGISTRY = {
     },
     REDNOTE: {
         'label': '小红书',
-        # 规格已核实，但写作/渲染/发布适配器尚未实现；选择可保存，流程不可推进。
-        'implemented': False,
+        # P0：写作与卡片产物已实现；上传适配器未实现，publish 仍被拒绝。
+        'implemented': True,
+        'publish_implemented': False,
         'writers': {'blogger': 'rednote-note-writer'},
-        'renderer': 'rednote-card-renderer',
+        # 方案 A：卡片渲染是图片后端（html），不是独立的第七步排版器。
+        'renderer': 'openwrite-images',
         'publisher': 'rednote-publisher',
         'publisher_entry': 'publish_note.py',
+        'format_label': '组装并保存可发布产物',
         # 图文形态：笔记文案 + 分页卡片稿 → 3:4 组图，封面即首图。
         'markdown_artifact': 'note.md',
         'rendered_artifact': None,
@@ -60,8 +65,8 @@ REGISTRY = {
         'optional_artifacts': [],
         'cover': {'id': 'cover', 'output': 'xhs-01-cover.png', 'width': 1080, 'height': 1440},
         'content_size': {'width': 1080, 'height': 1440},
-        # 组图必需：1 封面 + 4~8 内容页，可选总结页；卡片顺序取代长文插入锚点。
-        'content_images': {'required': True, 'min': 4, 'max': 8},
+        # 张数由内容动态决定；平台单篇上限待核实，先不写死。
+        'content_images': {'required': True, 'min': 1, 'max': None},
         'limits': {
             'title_chars': 20, 'title_bytes': None,
             'author_bytes': None, 'digest_bytes': None,
@@ -77,8 +82,8 @@ REGISTRY = {
             'page_title_chars': (12, 30),
             'export': 'PNG',
         },
-        # 正文长度上限未取得权威来源，需实测后再写入 limits，不凭印象写死。
-        'unverified': ['desc_chars'],
+        # 未取得权威来源的项不写入强制 limits，需实测后再补。
+        'unverified': ['desc_chars', 'max_images'],
     },
 }
 
@@ -94,12 +99,27 @@ def for_state(state: dict) -> dict:
 
 
 def require_pipeline(state: dict) -> dict:
-    """Reject platforms whose adapters do not exist yet, before any stage runs."""
+    """Reject platforms whose writing/format adapters do not exist yet."""
     profile = for_state(state)
     if not profile['implemented']:
         raise ValueError(f'已保存{profile["label"]}平台选择，但{profile["label"]}创作与发布适配尚未实现；'
                          '不能使用当前七步流程继续')
     return profile
+
+
+def require_publish_adapter(state: dict) -> dict:
+    """Publishing needs its own adapter; a publishable artifact is not an upload path."""
+    profile = require_pipeline(state)
+    if not profile.get('publish_implemented'):
+        raise ValueError(f'{profile["label"]}可发布产物已就绪，但上传适配器尚未实现；'
+                         '请手动发布，或等待发布适配器接入')
+    return profile
+
+
+def step_labels(state: dict) -> tuple:
+    """Shared stage order, platform-specific wording for the seventh stage."""
+    from workflow import LABELS
+    return LABELS[:-1] + (for_state(state)['format_label'],)
 
 
 def writer_skill(state: dict) -> str:

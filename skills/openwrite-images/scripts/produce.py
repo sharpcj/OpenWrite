@@ -45,8 +45,21 @@ def load_request(article: Path, request_id: str) -> dict:
         outputs.add(output)
         if item.get('role') not in ('cover', 'content'):
             raise ValueError('role 必须为 cover 或 content')
-        if item['role'] == 'cover' and output != 'cover.png':
-            raise ValueError('封面输出应为 cover.png')
+        # 封面文件名由平台注册表约定，控制器校验；本能力保持平台中立。
+        if 'order' in item and (type(item['order']) is not int or item['order'] < 1):
+            raise ValueError('order 必须是从 1 开始的整数')
+        if 'card' in item:
+            card = item['card']
+            if not isinstance(card, dict):
+                raise ValueError('card 必须是对象，描述卡片版式与内容')
+            if not isinstance(card.get('title'), str) or not card['title'].strip():
+                raise ValueError('card 需有非空 title')
+            for key in ('layout', 'theme', 'subtitle', 'footer'):
+                if key in card and not isinstance(card[key], str):
+                    raise ValueError(f'card.{key} 必须是字符串')
+            if 'bullets' in card and (not isinstance(card['bullets'], list)
+                                      or not all(isinstance(v, str) for v in card['bullets'])):
+                raise ValueError('card.bullets 必须是字符串列表')
         for key in ('width', 'height'):
             if type(item.get(key)) is not int or not 0 < item[key] <= 8192:
                 raise ValueError(f'{name} 的 {key} 必须为 1–8192 的整数')
@@ -91,6 +104,11 @@ def obtain_source(args: argparse.Namespace, request: dict, staging: Path) -> Pat
         return Path(args.source).expanduser().resolve()
     if args.source:
         raise ValueError('--source 仅适用于 file 方式')
+    if args.backend == 'html':
+        if not isinstance(request.get('card'), dict):
+            raise ValueError('html 方式需要 card 字段，描述卡片版式与内容')
+        module = load_module('openwrite_card', 'render_card.py')
+        return Path(module.render(request, staging / 'card.png')).resolve()
     prompt = build_prompt(request)
     if args.backend == 'comfyui':
         module = load_module('openwrite_comfy', 'comfyui_gen.py')
@@ -178,7 +196,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description='满足一项配图需求，返回校验后的本地图片')
     parser.add_argument('article', help='含 image-requests.json 的文章目录')
     parser.add_argument('--id', required=True, help='需求清单内的图片 id')
-    parser.add_argument('--backend', choices=['comfyui', 'file', 'gemini', 'dalle'], default='comfyui')
+    parser.add_argument('--backend', choices=['comfyui', 'file', 'html', 'gemini', 'dalle'], default='comfyui')
     parser.add_argument('--source', help='file 方式使用的实际图片文件，可来自宿主工具、绘图软件或用户')
     parser.add_argument('--profile', help='仅用于 ComfyUI 模型档案')
     parser.add_argument('--timeout', type=int, default=600)

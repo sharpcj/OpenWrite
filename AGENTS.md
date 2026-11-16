@@ -10,9 +10,9 @@ OpenWrite 是一个微信公众号创作工作区。用户在项目中提出写�
 
 默认配置是微信与自媒体博主。确定后由代码写入任务状态，继续任务时沿用，不因默认文件变化而更改。运行 `preferences` 可先查看解析结果；命令提示需要确认时，向用户取得明确选择再继续，不自动选择列表第一项。
 
-目前微信已接入；小红书只支持选择和记录，创作、格式化与发布仍未适配。选中小红书时说明限制，不能代替用户切换到微信或套用微信写作 Skill。
+微信已完整接入（写作→排版→上传草稿）。小红书已接入 **P0：写作与卡片产物**，交付「3:4 组图 + 笔记文案」，**上传适配器尚未实现，需用户手动发布**，不得声称已发布到小红书。不能代替用户切换平台，也不能把微信长文规则套用到小红书图文。
 
-平台差异由根目录 `platforms.py` 的注册表表达（产物形态、尺寸、张数、上限、渲染与发布 Skill），控制器与命令入口只查表，不散落平台判断。小红书的规格已核实并登记，但适配器未实现，`implemented: false` 时所有门禁拒绝推进。接入方式与路线见 [平台适配器契约](docs/platforms.md)。
+平台差异由根目录 `platforms.py` 的注册表表达（产物形态、尺寸、张数、上限、渲染与发布 Skill），控制器与命令入口只查表，不散落平台判断。`implemented` 管写作到可发布产物，`publish_implemented` 管上传，两者独立。接入方式与路线见 [平台适配器契约](docs/platforms.md)。
 
 ## 技能路由
 
@@ -23,6 +23,7 @@ OpenWrite 是一个微信公众号创作工作区。用户在项目中提出写�
 | 自媒体博主 `blogger`（默认；包括其技术或产品话题） | [wechat-blogger-writer](skills/wechat-blogger-writer/SKILL.md) |
 | 技术作者 `tech` | [wechat-tech-writer](skills/wechat-tech-writer/SKILL.md) |
 | 产品经理 `product` | [wechat-product-manager-writer](skills/wechat-product-manager-writer/SKILL.md) |
+| 小红书图文（`rednote` 平台） | [rednote-note-writer](skills/rednote-note-writer/SKILL.md) |
 | 第七步排版、生成公众号 HTML 与可发布产物 | [wechat-article-formatter](skills/wechat-article-formatter/SKILL.md) |
 | 生成、替换或导入图片，执行配图需求 | [openwrite-images](skills/openwrite-images/SKILL.md) |
 | 上传微信公众号草稿箱 | [wechat-draft-publisher](skills/wechat-draft-publisher/SKILL.md) |

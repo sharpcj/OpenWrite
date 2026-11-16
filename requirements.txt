@@ -2,3 +2,6 @@
 PyYAML>=6.0
 requests>=2.31.0
 Pillow>=10.0
+# 小红书卡片渲染（HTML -> PNG）。安装后还需执行一次：
+#   python -m playwright install chromium
+playwright>=1.40

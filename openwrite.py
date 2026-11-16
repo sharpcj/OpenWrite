@@ -16,14 +16,22 @@ import preferences
 
 ROOT = Path(__file__).resolve().parent
 SKILLS = ROOT / 'skills'
-# Neutral capabilities plus every implemented platform's skills, derived from the registry.
-SKILL_NAMES = tuple(dict.fromkeys(
-    ['openwrite-images'] + [
-        skill
-        for profile in platforms.REGISTRY.values() if profile['implemented']
-        for skill in [*profile['writers'].values(), profile['renderer'], profile['publisher']]
-    ]
-))
+
+
+def _registered_skills() -> tuple:
+    """Neutral capabilities plus each implemented platform's existing skills."""
+    names = ['openwrite-images']
+    for profile in platforms.REGISTRY.values():
+        if not profile['implemented']:
+            continue
+        names.extend(profile['writers'].values())
+        names.append(profile['renderer'])
+        if profile.get('publish_implemented'):
+            names.append(profile['publisher'])
+    return tuple(dict.fromkeys(names))
+
+
+SKILL_NAMES = _registered_skills()
 
 
 def run_skill(name: str, script: str, *arguments: str) -> int:
@@ -103,8 +111,10 @@ def format_article(args: argparse.Namespace) -> int:
     directory = article_directory(args.article)
     state = workflow.require_format_stage(directory)
     profile = platforms.for_state(state)
+    if profile['rendered_artifact'] is None:
+        return assemble_card_set(directory, state, profile)
     render = RENDERERS.get(preferences.task_platform(state))
-    if render is None or not profile['rendered_artifact']:
+    if render is None:
         raise ValueError(f'{profile["label"]}排版适配器尚未实现，无法生成可发布产物')
     markdown = directory / profile['markdown_artifact']
     output = directory / profile['rendered_artifact']
@@ -126,10 +136,28 @@ def format_article(args: argparse.Namespace) -> int:
     return 0
 
 
+def assemble_card_set(directory: Path, state: dict, profile: dict) -> int:
+    """组图平台第七步：卡片已在第 4/5 步渲染，这里只组装、校验并写清单。"""
+    checks = workflow.check_publishable(directory, state)
+    requests = workflow.read_json(directory / 'image-requests.json')['images']
+    cover = next(item for item in requests if item['role'] == 'cover')
+    theme = (cover.get('card') or {}).get('theme', 'default')
+    workflow.complete_format(directory, theme, False, checks)
+    manifest = workflow.read_json(directory / 'publish-manifest.json')
+    print(f'已组装可发布产物：{len(manifest["images"])} 张卡片 + 笔记文案（主题：{theme}）')
+    print(f'发布清单：{directory / "publish-manifest.json"}（标题：{manifest["title"]}；'
+          f'话题：{"、".join(manifest["topics"]) or "无"}）')
+    if profile.get('publish_implemented'):
+        print('七步写作已完成；上传仍需用户明确确认。')
+    else:
+        print(f'七步写作已完成；{profile["label"]}上传适配器尚未实现，请手动发布。')
+    return 0
+
+
 def publish_article(args: argparse.Namespace) -> int:
     directory = article_directory(args.article)
     manifest = workflow.require_publishable(directory)
-    profile = platforms.for_state(workflow.load(directory))
+    profile = platforms.require_publish_adapter(workflow.load(directory))
     content = directory / profile['rendered_artifact']
     cover = directory / profile['cover']['output']
     for path in (content, cover):
@@ -192,7 +220,7 @@ def workflow_command(args: argparse.Namespace) -> int:
         print('小红书任务选择已保存；对应创作与发布适配尚未实现。')
     stale = workflow.stale_step(directory, state)
     done = len(state['completed'])
-    for index, (step, label) in enumerate(zip(workflow.STEPS, workflow.LABELS)):
+    for index, (step, label) in enumerate(zip(workflow.STEPS, platforms.step_labels(state))):
         marker = '已完成' if index < done else ('当前' if index == done else '待执行')
         if stale and index >= workflow.STEPS.index(stale[0]) and index < done:
             marker = '已过期'
@@ -209,7 +237,10 @@ def workflow_command(args: argparse.Namespace) -> int:
             hint = '写正文前需先取得用户对标题与大纲的确认（outline.md / outline.json）。' if step == 'draft' and workflow.outline_required(state) else '完成产物后使用 workflow complete。'
             print(f'下一步：{step}；{hint}')
         else:
-            print('七步写作已完成，产物可发布；上传草稿仍需用户明确确认。')
+            if profile.get('publish_implemented'):
+                print('七步写作已完成，产物可发布；上传草稿仍需用户明确确认。')
+            else:
+                print(f'七步写作已完成，产物可发布；{profile["label"]}上传适配器尚未实现，请手动发布。')
     return 0
 
 
@@ -231,6 +262,21 @@ def preference_command(args: argparse.Namespace) -> int:
     if selection['platform'] == 'rednote':
         print('小红书选择可记录；对应创作与发布能力尚未适配。', file=sys.stderr)
     return 0
+
+
+def _card_runtime_status() -> str:
+    """Local-only readiness of the HTML card renderer; never downloads anything."""
+    if importlib.util.find_spec('playwright') is None:
+        return '缺少 playwright，运行 python3 -m pip install -r requirements.txt'
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as playwright:
+            path = Path(playwright.chromium.executable_path)
+        if path.exists():
+            return 'OK（playwright + Chromium 就绪）'
+    except Exception as exc:
+        return f'检查失败：{exc}'
+    return '缺少浏览器，运行 python3 -m playwright install chromium'
 
 
 def doctor(args: argparse.Namespace) -> int:
@@ -258,6 +304,13 @@ def doctor(args: argparse.Namespace) -> int:
     planned = [profile['label'] for profile in platforms.REGISTRY.values() if not profile['implemented']]
     if planned:
         print(f'平台适配器尚未实现：{"、".join(planned)}（可选择并记录，不能推进创作流程）。')
+    no_upload = [profile['label'] for profile in platforms.REGISTRY.values()
+                 if profile['implemented'] and not profile.get('publish_implemented')]
+    if no_upload:
+        print(f'可发布产物已支持但上传适配器未实现：{"、".join(no_upload)}（需手动发布）。')
+    if any(profile['implemented'] and profile['rendered_artifact'] is None
+           for profile in platforms.REGISTRY.values()):
+        print(f'卡片渲染：{_card_runtime_status()}')
     if not (ROOT / preferences.ENV_NAME).exists():
         print(f'提示：上传草稿前运行 python3 openwrite.py setup 生成 {preferences.ENV_NAME} 并填写微信凭证。')
     if not all(passed for _, passed in checks):
@@ -313,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     image = commands.add_parser('image', help='执行独立图片能力，满足一项配图需求')
     image.add_argument('article', help='含 image-requests.json 的文章目录')
     image.add_argument('--id', required=True)
-    image.add_argument('--backend', choices=['comfyui', 'file', 'gemini', 'dalle'], default='comfyui')
+    image.add_argument('--backend', choices=['comfyui', 'file', 'html', 'gemini', 'dalle'], default='comfyui')
     image.add_argument('--source', help='已有图片或宿主工具输出文件')
     image.add_argument('--profile', help='ComfyUI 模型档案')
     image.add_argument('--timeout', type=int, default=600)

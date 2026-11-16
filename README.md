@@ -57,8 +57,9 @@ OpenWrite/
 | [wechat-blogger-writer](skills/wechat-blogger-writer/SKILL.md) | 默认自媒体博主视角，注重易读性、观点与实际价值 |
 | [wechat-tech-writer](skills/wechat-tech-writer/SKILL.md) | 技术科普、工具介绍；封面必需，正文配图按需 |
 | [wechat-product-manager-writer](skills/wechat-product-manager-writer/SKILL.md) | 产品视角、真实场景；封面必需，正文配图按需 |
+| [rednote-note-writer](skills/rednote-note-writer/SKILL.md) | 小红书图文：钩子标题、短文案、话题、3:4 组图卡片稿 |
 | [wechat-article-formatter](skills/wechat-article-formatter/SKILL.md) | Markdown 转公众号 HTML，四套 YAML 主题 |
-| [openwrite-images](skills/openwrite-images/SKILL.md) | 接收配图需求，获取、校验并保存图片；集中管理后端 |
+| [openwrite-images](skills/openwrite-images/SKILL.md) | 接收配图需求，获取、校验并保存图片；集中管理后端，含卡片 `html` 渲染 |
 | [wechat-draft-publisher](skills/wechat-draft-publisher/SKILL.md) | 上传封面、正文图片和微信草稿 |
 
 ## 默认平台与写作视角
@@ -74,9 +75,9 @@ python3 openwrite.py new my-topic --title "文章主题"
 python3 openwrite.py new product-topic --title "产品主题" --perspective product
 ```
 
-选择写入任务状态，继续任务不受后来默认配置修改影响。小红书可选择并记录，但对应创作和发布适配尚未实现，不能调用微信流程继续。详见 [平台与视角选择](docs/task-selection.md)。
+选择写入任务状态，继续任务不受后来默认配置修改影响。小红书已接入 P0（写作与卡片产物），上传适配器尚未实现，需手动发布。详见 [平台与视角选择](docs/task-selection.md)。
 
-平台差异统一登记在 `platforms.py` 注册表（产物形态、尺寸、张数、上限、渲染与发布 Skill），流程控制器与命令入口只查表。小红书规格已核实登记但适配器未实现；接入清单与分阶段路线见 [平台适配器契约](docs/platforms.md)。
+平台差异统一登记在 `platforms.py` 注册表（产物形态、尺寸、张数、上限、渲染与发布 Skill），流程控制器与命令入口只查表。`implemented` 管写作到可发布产物，`publish_implemented` 管上传，两者独立；接入清单与分阶段路线见 [平台适配器契约](docs/platforms.md)。
 
 ## 环境准备
 
@@ -94,6 +95,14 @@ python3 openwrite.py setup
 ```
 
 需要 Python 3.8+。核心依赖为 PyYAML、Requests 和 Pillow。`doctor` 只检查本地依赖、技能入口和模板，不调用 ComfyUI 或微信 API。`setup` 只复制配置模板，不联网、不写入任何密钥。
+
+小红书卡片渲染额外需要 Playwright 与 Chromium（仅做本地 HTML→PNG，不联网生图）：
+
+```bash
+python3 -m playwright install chromium   # 一次性下载，之后可离线使用
+```
+
+`doctor` 会报告「卡片渲染」就绪状态；只做微信任务时可不安装。
 
 ## 文章工作区
 

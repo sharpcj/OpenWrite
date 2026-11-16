@@ -147,18 +147,21 @@ class PreferenceTests(unittest.TestCase):
         self.assertIn('任务平台：微信；写作视角：产品经理', result.stdout)
         self.assertEqual(path.read_bytes(), before)
 
-    def test_rednote_choice_is_saved_but_wechat_workflow_cannot_be_used(self):
+    def test_rednote_choice_is_saved_and_writing_pipeline_is_available(self):
         result = self.run_cli('new', 'rednote-topic', '--platform', 'rednote')
         self.assertEqual(result.returncode, 0, result.stderr)
         article = self.project / 'articles/rednote-topic'
         state = json.loads((article / 'workflow.json').read_text())
         self.assertEqual(state['platform'], 'rednote')
-        for arguments in [('workflow', 'complete', str(article), '--step', 'search'),
-                          ('format', str(article)), ('publish', str(article), '--title', '测试')]:
-            with self.subTest(arguments=arguments):
-                result = self.run_cli(*arguments)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn('小红书创作与发布适配尚未实现', result.stderr)
+        (article / 'sources.json').write_text(json.dumps({'version': 1, 'sources': [
+            {'id': 's1', 'title': '用户资料', 'kind': 'user', 'content': '实际资料内容'},
+        ]}, ensure_ascii=False), encoding='utf-8')
+        result = self.run_cli('workflow', 'complete', str(article), '--step', 'search')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        status = self.run_cli('workflow', 'status', str(article))
+        self.assertIn('任务平台：小红书', status.stdout)
+        self.assertIn('rednote-note-writer', status.stdout)
+        self.assertIn('组装并保存可发布产物', status.stdout)
 
 
 if __name__ == '__main__':

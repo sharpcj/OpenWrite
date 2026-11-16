@@ -6,17 +6,19 @@
 
 固定顺序：**搜索资料 → 分析资料 → 写正文 → 生成封面 → 按需生成正文配图 → 生成 Markdown → 排版并保存可发布产物**。
 
+顺序与门禁平台中立，产物形态按平台分派（注册表 `platforms.py`）。第七步的名称随平台变化：微信「排版并保存可发布产物」，小红书「组装并保存可发布产物」。平台差异详见 [平台适配器契约](platforms.md)。
+
 ## 最小阶段协议
 
 | 步骤标识 | 必需产物 | 代码检查 |
 |---|---|---|
 | `search` | `sources.json` | 至少一个来源；有标题、实际提取内容及 URL，或明确为用户资料 |
 | `analysis` | `analysis.md` | 有实际内容，通过 `source:<id>` 关联已有来源 |
-| `draft` | `outline.md`、`outline.json`、`draft.md` | 标题与大纲已获用户确认；正文不只是标题、不嵌图；H1 与已确认标题一致 |
-| `cover` | 封面需求、图片执行结果、`cover.png` | 需求指纹一致；图片可解码、格式与尺寸正确；提交验收记录 |
-| `content` | `content-images.json`，以及需要的正文配图 | 明确是否需要；决策与清单一致；需要的图片均有效、已验收，插入位置有效 |
-| `markdown` | 程序生成的 `article.md` | 前五步有效；根据正文与已验收配图自动整合 |
-| `format` | `article.html`、`publish-manifest.json` | 前六步有效；可发布性检查通过；清单记录元数据与全部产物指纹 |
+| `draft` | `outline.md`、`outline.json`、`draft.md`（小红书另需 `cards.md`） | 标题与大纲已获用户确认；正文不只是标题、不嵌图；H1 与已确认标题一致 |
+| `cover` | 封面需求、图片执行结果、封面文件 | 需求指纹一致；图片可解码、格式与尺寸正确；提交验收记录 |
+| `content` | `content-images.json`，以及需要的正文配图 | 明确是否需要；决策与清单一致；需要的图片均有效、已验收；微信校验插入锚点，小红书校验 `order` |
+| `markdown` | 程序生成的 `article.md` / `note.md` | 前五步有效；微信插图整合，小红书只整合文案 |
+| `format` | 微信 `article.html`；小红书卡片组 + 清单 | 前六步有效；可发布性检查通过；清单记录元数据与全部产物指纹 |
 
 `brief.md` 仍保存主题、受众、额外约束和过程备注。`workflow.json` 由命令管理，不由 Agent 直接编辑来跳过步骤。每篇文章按单一任务顺序执行，不并发更新状态。
 
@@ -156,7 +158,11 @@ python3 openwrite.py format articles/rag-guide --theme default
 
 `finalize` 是第六步：根据 `draft.md` 和正文图片插入位置生成 `article.md`；封面不写入正文。最终文件由程序整合，不让 Agent 另写一份与草稿脱节的正文。
 
-`format` 是第七步：转换 HTML、执行微信代码块兼容转换，然后做**可发布性检查**——标题不超过 64 字符 / 192 字节、作者不超过 20 字节、摘要不超过 120 字节、封面存在且为 PNG 且小于 2MB、HTML 非空、代码块已转换、正文引用的本地图片都存在。任一不通过即报错，保留上一次成功的 HTML，不推进状态。
+`format` 是第七步。微信：转换 HTML、执行微信代码块兼容转换，然后做**可发布性检查**——标题不超过 64 字符 / 192 字节、作者不超过 20 字节、摘要不超过 120 字节、封面存在且为 PNG 且小于 2MB、HTML 非空、代码块已转换、正文引用的本地图片都存在。
+
+小红书：卡片已在第 4/5 步由 `html` 后端渲染，第七步**只组装与校验**——确定卡片顺序（封面第 1，内容按 `order`）、标题不超过 20 字、逐张校验 PNG 与 1080×1440 尺寸、核对 `note.md` 标题与文案、解析话题。
+
+任一检查不通过即报错，保留上一次成功的产物，不推进状态。
 
 检查通过后写入 `publish-manifest.json` 并自动完成第七步：
 
@@ -185,7 +191,9 @@ python3 openwrite.py format articles/rag-guide --theme default
 python3 openwrite.py publish articles/rag-guide
 ```
 
-`publish` 要求七步完成，且 `publish-manifest.json` 记录的指纹与当前 `article.md`、`article.html`、封面、正文配图及可选 `closing.md` 完全一致；标题默认取清单中已确认的值，`--title` / `--author` / `--digest` 可显式覆盖。产物在确认后被修改时旧确认失效，必须重新排版并重新取得用户确认。凭证来自项目 `.env`，未配置时在调用微信 API 之前报错。
+`publish` 要求七步完成，且 `publish-manifest.json` 记录的指纹与当前产物完全一致；标题默认取清单中已确认的值，`--title` / `--author` / `--digest` 可显式覆盖。产物在确认后被修改时旧确认失效，必须重新排版并重新取得用户确认。微信凭证来自项目 `.env`，未配置时在调用微信 API 之前报错。
+
+**小红书上传适配器尚未实现**：七步完成后产物即可发布，但 `publish` 会拒绝并提示手动发布，不会调用任何外部接口。
 
 ## 返工与恢复
 

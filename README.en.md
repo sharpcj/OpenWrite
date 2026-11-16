@@ -37,6 +37,7 @@ OpenWrite/
 │   ├── wechat-blogger-writer/
 │   ├── wechat-tech-writer/
 │   ├── wechat-product-manager-writer/
+│   ├── rednote-note-writer/
 │   ├── wechat-article-formatter/
 │   ├── wechat-draft-publisher/
 │   └── openwrite-images/
@@ -93,7 +94,9 @@ python3 openwrite.py image articles/rag-guide --id cover --backend comfyui
 python3 openwrite.py image articles/rag-guide --id cover --backend file --source /path/to/cover.png
 ```
 
-Backend code, configuration, and workflows live only in `skills/openwrite-images/`. ComfyUI and optional Gemini / DALL-E implementations are retained. Agent-generated, user-supplied, or software-rendered images can be imported through `file`. Pillow validates files and dimensions. Resizing, cropping, and overwriting require explicit options. File readiness does not replace visual review by the writing workflow.
+Backend code, configuration, and workflows live only in `skills/openwrite-images/`. ComfyUI and optional Gemini / DALL-E implementations are retained. Agent-generated, user-supplied, or software-rendered images can be imported through `file`. Text-precise cards (Rednote) are typeset in HTML and screenshotted by the `html` backend using Playwright, with real DOM checks for overflow, minimum font size and safe area. Pillow validates files and dimensions. Resizing, cropping, and overwriting require explicit options. File readiness does not replace visual review by the writing workflow.
+
+Rednote card rendering needs Playwright plus a one-time browser download (`python3 -m playwright install chromium`); it runs locally and offline afterwards. `doctor` reports its readiness. WeChat-only tasks do not need it.
 
 WeChat credentials share the project configuration: `.env.example` is a tracked placeholder template, and real values live in the local `.env`. Run `python3 openwrite.py setup` to copy the template (existing files are never overwritten; the copy gets mode 600 and is Git-ignored), then fill in `WeChatAppID`, `WeChatAppSecret`, and optionally `WeChatAuthor`. Never put real secrets into `.env.example`. Without credentials, `publish` fails with these instructions instead of reading `~/.wechat-publisher/config.json`; the access-token cache remains at `~/.wechat-publisher/token_cache.json`. Project-local skills do not remove external-service setup requirements. Publishing creates a WeChat draft rather than sending the article to subscribers.
 
@@ -127,6 +130,6 @@ Runtime configuration is read only from the local `.env`; `.env.example` is a sa
 
 Explicit user choices, passed by the agent as `--platform wechat|rednote` and `--perspective blogger|tech|product`, override the unique enabled default in each group. If no single option is enabled and the user has not specified one, the command refuses to create a task and asks for an explicit choice. The two groups resolve independently.
 
-Run `python3 openwrite.py preferences` to inspect the resolved defaults. Task choices are persisted in `workflow.json`; changing the defaults does not change existing work. Rednote choices can be saved, but its creation and publishing adapters are not implemented and cannot use the WeChat pipeline. See [selection rules](docs/task-selection.md).
+Run `python3 openwrite.py preferences` to inspect the resolved defaults. Task choices are persisted in `workflow.json`; changing the defaults does not change existing work. Rednote has P0 implemented (writing and card artifacts); its upload adapter is not implemented, so publishing is manual. See [selection rules](docs/task-selection.md).
 
-Platform differences live in the `platforms.py` registry (artifact shape, dimensions, image counts, limits, renderer and publisher skills); the controller and command entry only read that table. Rednote specs are verified and registered while its adapters remain unimplemented. See the [platform adapter contract](docs/platforms.md) for the onboarding checklist and phased roadmap.
+Platform differences live in the `platforms.py` registry (artifact shape, dimensions, image counts, limits, renderer and publisher skills); the controller and command entry only read that table. `implemented` covers writing through the publishable artifact, `publish_implemented` covers uploading; the two are independent. See the [platform adapter contract](docs/platforms.md) for the onboarding checklist and phased roadmap.

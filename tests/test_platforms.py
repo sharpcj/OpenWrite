@@ -35,26 +35,43 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(profile['checks']['code_blocks_converted'])
         self.assertEqual(profile['author_key'], 'WeChatAuthor')
 
-    def test_rednote_specs_are_recorded_but_pipeline_is_not_implemented(self):
+    def test_rednote_writing_pipeline_is_implemented_but_upload_is_not(self):
         profile = platforms.spec('rednote')
-        self.assertFalse(profile['implemented'])
+        self.assertTrue(profile['implemented'])
+        self.assertFalse(profile['publish_implemented'])
+        self.assertEqual(profile['format_label'], '组装并保存可发布产物')
         self.assertEqual(profile['limits']['title_chars'], 20)
         self.assertEqual((profile['cover']['width'], profile['cover']['height']), (1080, 1440))
+        self.assertEqual(profile['cover']['output'], 'xhs-01-cover.png')
         self.assertEqual(profile['content_size'], {'width': 1080, 'height': 1440})
+        # 张数动态：必需正文卡片，但不固定上下限。
         self.assertTrue(profile['content_images']['required'])
-        self.assertEqual((profile['content_images']['min'], profile['content_images']['max']), (4, 8))
+        self.assertEqual(profile['content_images']['min'], 1)
+        self.assertIsNone(profile['content_images']['max'])
         self.assertEqual(profile['markdown_artifact'], 'note.md')
         self.assertIsNone(profile['rendered_artifact'])
+        self.assertEqual(profile['renderer'], 'openwrite-images')
         self.assertFalse(profile['checks']['code_blocks_converted'])
-        # Unverified platform limits must stay out of the enforced limits.
-        self.assertIn('desc_chars', profile['unverified'])
+        # 未取得权威来源的项不得进入强制 limits。
+        self.assertEqual(set(profile['unverified']), {'desc_chars', 'max_images'})
         self.assertNotIn('desc_chars', profile['limits'])
+        self.assertNotIn('max_images', profile['limits'])
+
+    def test_step_labels_are_platform_specific(self):
+        wechat = platforms.step_labels({'platform': 'wechat'})
+        rednote = platforms.step_labels({'platform': 'rednote'})
+        self.assertEqual(wechat[:-1], rednote[:-1])
+        self.assertEqual(wechat[-1], '排版并保存可发布产物')
+        self.assertEqual(rednote[-1], '组装并保存可发布产物')
 
     def test_implemented_platforms_ship_their_skills(self):
         for name, profile in platforms.REGISTRY.items():
             if not profile['implemented']:
                 continue
-            for skill in [profile['renderer'], profile['publisher'], *profile['writers'].values()]:
+            skills = [profile['renderer'], *profile['writers'].values()]
+            if profile.get('publish_implemented'):
+                skills.append(profile['publisher'])
+            for skill in skills:
                 with self.subTest(platform=name, skill=skill):
                     self.assertTrue((ROOT / 'skills' / skill / 'SKILL.md').is_file())
 
@@ -94,22 +111,23 @@ class PipelineGateTests(unittest.TestCase):
         self.assertEqual(profile['label'], '微信')
         workflow.complete(self.article, 'search')
 
-    def test_rednote_selection_is_saved_but_every_gate_rejects_it(self):
+    def test_rednote_can_write_but_upload_adapter_is_still_missing(self):
         self.start('rednote')
         state = workflow.load(self.article)
         self.assertEqual(state['platform'], 'rednote')
+        # 写作门禁已放行。
+        self.assertEqual(platforms.require_pipeline(state)['label'], '小红书')
+        workflow.complete(self.article, 'search')
+        # 上传适配器未实现，publish 仍被拒绝。
         with self.assertRaises(ValueError) as error:
-            platforms.require_pipeline(state)
-        self.assertIn('小红书创作与发布适配尚未实现', str(error.exception))
-        for action in (lambda: workflow.complete(self.article, 'search'),
-                       lambda: workflow.require_image_stage(self.article, 'cover'),
-                       lambda: workflow.require_format_stage(self.article),
-                       lambda: workflow.require_finished(self.article)):
-            with self.subTest(action=action):
-                with self.assertRaises(ValueError):
-                    action()
-        # The saved choice itself stays readable and unchanged.
+            platforms.require_publish_adapter(workflow.load(self.article))
+        self.assertIn('上传适配器尚未实现', str(error.exception))
         self.assertEqual(workflow.load(self.article)['platform'], 'rednote')
+
+    def test_wechat_upload_adapter_is_available(self):
+        self.start('wechat')
+        self.assertEqual(platforms.require_publish_adapter(workflow.load(self.article))['publisher'],
+                         'wechat-draft-publisher')
 
     def test_limits_are_read_from_the_registry(self):
         self.start('wechat')
