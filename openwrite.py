@@ -69,8 +69,11 @@ def new_article(args: argparse.Namespace) -> int:
     print(f'已创建文章工作区：{directory}')
     print(f'本次任务：{platform_label} / {perspective}')
     print(f'标题与大纲检查点：{"开启，写正文前需用户确认" if checkpoint else "已授权跳过"}')
-    if selection['platform'] == 'rednote':
-        print('小红书选择已保存；其创作与发布能力尚未适配，暂不能推进微信流程。')
+    profile = platforms.spec(selection['platform'])
+    if not profile['implemented']:
+        print(f'{profile["label"]}选择已保存；其创作与发布能力尚未适配，暂不能推进创作流程。')
+    elif not profile.get('publish_implemented'):
+        print(f'{profile["label"]}选择已保存；创作流程可推进，上传适配器尚未实现，完成后需手动发布。')
     print('已创建需求、来源清单、分析与正文草稿及 workflow.json；当前步骤：search。')
     return 0
 
@@ -216,8 +219,8 @@ def workflow_command(args: argparse.Namespace) -> int:
             print(f'写作 Skill：{exc}')
     else:
         print(f'写作 Skill：{profile["label"]}适配器尚未实现')
-    if platform == 'rednote':
-        print('小红书任务选择已保存；对应创作与发布适配尚未实现。')
+    if profile['implemented'] and not profile.get('publish_implemented'):
+        print(f'{profile["label"]}上传适配器尚未实现；七步完成后需手动发布。')
     stale = workflow.stale_step(directory, state)
     done = len(state['completed'])
     for index, (step, label) in enumerate(zip(workflow.STEPS, platforms.step_labels(state))):
@@ -259,8 +262,11 @@ def preference_command(args: argparse.Namespace) -> int:
     selection = preferences.resolve(ROOT, args.platform, args.perspective)
     print(json.dumps(selection, ensure_ascii=False, indent=2))
     print(f'OutlineApproval（标题与大纲确认检查点）：{preferences.outline_approval(ROOT)}')
-    if selection['platform'] == 'rednote':
-        print('小红书选择可记录；对应创作与发布能力尚未适配。', file=sys.stderr)
+    profile = platforms.spec(selection['platform'])
+    if not profile['implemented']:
+        print(f'{profile["label"]}选择可记录；对应创作与发布能力尚未适配。', file=sys.stderr)
+    elif not profile.get('publish_implemented'):
+        print(f'{profile["label"]}创作能力已就绪；上传适配器尚未实现，需手动发布。', file=sys.stderr)
     return 0
 
 

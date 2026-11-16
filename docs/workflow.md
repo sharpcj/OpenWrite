@@ -26,7 +26,7 @@
 
 ## 初始化与查看
 
-新任务及 `workflow init` 按 [平台与视角规则](task-selection.md) 只读取本地 `.env`（`.env.example` 仅是 `setup` 用的模板）；提示词明确指定值由 Agent 转为参数。默认微信与自媒体博主。已保存任务继续沿用原选择。小红书尚未接入，不会误用微信阶段推进。
+新任务及 `workflow init` 按 [平台与视角规则](task-selection.md) 只读取本地 `.env`（`.env.example` 仅是 `setup` 用的模板）；提示词明确指定值由 Agent 转为参数。默认微信与自媒体博主。已保存任务继续沿用原选择。小红书已接入 P0（写作与卡片产物），上传适配器尚未实现；任务按图文形态推进，不会套用微信长文规则。
 
 ```bash
 python3 openwrite.py new rag-guide --title "RAG 入门" --type tech
