@@ -271,6 +271,12 @@ def workflow_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def board_command(args: argparse.Namespace) -> int:
+    import board
+    board.serve(ROOT, args.port, not args.no_browser)
+    return 0
+
+
 def setup_command(args: argparse.Namespace) -> int:
     target, created = preferences.init_env(ROOT)
     if created:
@@ -388,6 +394,10 @@ def main(argv: list[str] | None = None) -> int:
     defaults.set_defaults(action=preference_command)
     check = commands.add_parser('doctor', help='检查本地依赖、Skill 及模板，不联网')
     check.set_defaults(action=doctor)
+    board = commands.add_parser('board', help='启动实时故事板：左侧任务列表（分页/过滤），右侧选中任务的创作看板（只读）')
+    board.add_argument('--port', type=int, default=8765, help='本地端口（默认 8765，仅绑定 127.0.0.1）')
+    board.add_argument('--no-browser', action='store_true', help='不自动打开浏览器')
+    board.set_defaults(action=board_command)
     formatting = commands.add_parser('format', help='第七步：排版并保存可发布产物（渲染结果 + publish-manifest.json）')
     formatting.add_argument('article', help='文章目录路径，相对于当前工作目录')
     formatting.add_argument('--theme', default='default')

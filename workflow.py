@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 import tempfile
+from datetime import datetime
 
 import platforms
 import preferences
@@ -69,7 +70,8 @@ def initialize(article: Path, title: str = '', perspective: str = 'tech',
     state = {'version': 1, 'title': title, 'type': perspective,
              'platform': platform, 'perspective': perspective,
              'selection_source': selection_source or {},
-             'outline_approval': bool(outline_approval), 'revision': 0, 'completed': []}
+             'outline_approval': bool(outline_approval), 'revision': 0, 'completed': [],
+             'created_at': datetime.now().astimezone().isoformat(timespec='seconds')}
     write_json(path, state)
     return state
 

@@ -36,6 +36,8 @@ OpenWrite/
 ├── workflow.py                     # 七步状态与产物检查
 ├── preferences.py                  # 平台与视角默认值解析
 ├── platforms.py                    # 平台适配器注册表（产物规格与 Skill 接线）
+├── board.py                        # 实时故事板服务（只读聚合）
+├── board.html                      # 故事板页面（任务列表 + 创作看板）
 ├── .env.example                    # 配置占位模板：平台、视角、微信凭证
 ├── .env                            # 本地真实配置，由 setup 生成，Git 忽略
 ├── requirements.txt
@@ -216,6 +218,15 @@ WeChatAuthor=你的作者名
 小红书发布凭证同样写在 `.env`：`XhsCreatorCookie` 为登录 https://creator.xiaohongshu.com 后复制的完整 Cookie（需含 `a1` 与登录凭证）。发布默认「仅自己可见」，公开需显式 `--public`；可先 `--dry-run` 预演。Cookie 会过期，失效时重新复制；未配置时 `publish` 在启动浏览器前报错。
 
 Skill 是项目级的，无需全局安装；仍需配置实际使用的图片来源或公众号等外部服务。发布器创建草稿，最终群发在微信后台操作。
+
+## 实时故事板
+
+```bash
+python3 openwrite.py board                      # http://127.0.0.1:8765，自动打开浏览器
+python3 openwrite.py board --port 9000 --no-browser
+```
+
+左侧为全部任务的分页列表（默认按创建日期倒序，支持日期范围与平台过滤）；右侧为选中任务的创作看板：标题、平台/主题/视角副标题、七步进展，任务完成后显示交付件缩略图（微信含排版 HTML 预览，小红书含卡片组与笔记文案）。页面每 2 秒自动刷新，**只读**，不修改任何任务状态，也不读取凭证。新任务自动记录 `created_at`，旧任务回退到状态文件时间。
 
 ## 开发验证
 
