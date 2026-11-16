@@ -12,7 +12,7 @@ OpenWrite 是项目级创作工程，统一入口为 [AGENTS.md](AGENTS.md)。�
 
 新任务的平台采用配置中唯一启用项，写作视角采用单值 `WriterRole`（缺省默认自媒体博主）：运行时只读取本地 `.env`，[.env.example](.env.example) 只是供 `setup` 复制的打样模板，不参与解析。用户提示词明确指定时以其选择优先。Agent 仅把明确选择传为 `--platform` / `--perspective`；平台配置歧义通过命令返回“需要确认”，必须向用户取得明确选择。详见 [任务选择规则](docs/task-selection.md)。继续任务以已有状态为准，不重选。
 
-平台产物规格与适配器接线登记在 `platforms.py` 注册表，控制器与命令入口只查表。微信已完整接入；小红书已接入 P0（写作与卡片产物），上传适配器未实现，需手动发布。写作 Skill 由 `platforms.writer_skill(state)` 按平台与视角解析，不要凭主题词自行切换。接入清单见 [平台适配器契约](docs/platforms.md)。
+平台产物规格与适配器接线登记在 `platforms.py` 注册表，控制器与命令入口只查表。微信与小红书均已完整接入；小红书发布默认仅自己可见，公开需显式 `--public`，可先 `--dry-run` 预演。写作 Skill 由 `platforms.writer_skill(state)` 按平台与视角解析，不要凭主题词自行切换。接入清单见 [平台适配器契约](docs/platforms.md)。
 
 ## 能力要求
 
@@ -24,6 +24,7 @@ OpenWrite 是项目级创作工程，统一入口为 [AGENTS.md](AGENTS.md)。�
 | 本地生图 | 命令执行、Python、可访问的 ComfyUI | 用户选择已配置的宿主生图能力，或保留提示词 |
 | 排版 | 命令执行、Python、PyYAML | 提供项目命令供用户执行 |
 | 上传草稿 | 命令执行、Python、Requests、网络及公众号凭证 | 交付 HTML、图片和发布命令 |
+| 发布小红书笔记 | 命令执行、Python、Playwright + Chromium、网络及创作平台 Cookie | 交付组图、文案和发布命令（可 dry-run 预演） |
 
 “搜索”“写文件”“生成图片”描述能力，不是固定 API。工具参数、返回值、凭证及计费由宿主和后端决定。未实际生成的文件或草稿不能作为已完成产物交付。
 
@@ -87,12 +88,12 @@ Open the repository in your agent and read [AGENTS.md](AGENTS.md). The skills li
 
 Writing skills submit backend-neutral requests to `image-requests.json`. The independent `openwrite-images` capability owns acquisition, backend configuration, decoding, dimension checks, and `image-results.json`. Image readiness still requires visual review.
 
-Platform differences are data in the `platforms.py` registry (artifact shape, dimensions, image counts, limits, renderer and publisher skills); the controller and command entry only read that table, and `workflow status` names the writing skill for the saved platform and perspective. WeChat is fully implemented. Rednote has P0 implemented (writing plus card artifacts, delivered as a 3:4 card set and note copy); its upload adapter is not implemented, so publishing must be done manually. `implemented` and `publish_implemented` are independent switches. See the [platform adapter contract](docs/platforms.md) for the onboarding checklist and phased roadmap.
+Platform differences are data in the `platforms.py` registry (artifact shape, dimensions, image counts, limits, renderer and publisher skills); the controller and command entry only read that table, and `workflow status` names the writing skill for the saved platform and perspective. WeChat and Rednote are both fully implemented. Rednote publishing drives the creator platform's publish page with Playwright (the site signs its own requests); it defaults to private visibility, requires an explicit `--public` for public notes, and supports `--dry-run`. `implemented` and `publish_implemented` are independent switches. See the [platform adapter contract](docs/platforms.md) for the onboarding checklist and phased roadmap.
 
 Map the documented capabilities to the host's actual tools. Report missing capabilities and provide text, prompts, or commands instead of claiming unexecuted work. Continue an article by reading its `brief.md` and existing artifacts.
 
 `openwrite.py` finds its resources relative to the project, independent of the shell working directory. `new` creates a workspace under the project; `format` and `publish` accept a directory relative to the caller or an absolute path. Use one Python environment for the entrypoint and child scripts.
 
-`doctor` performs local checks only. `format` also converts code blocks for WeChat; use `--no-preformat` to preserve original code quotes and spacing. `publish` calls the WeChat API, requires HTML and a cover, and should run when the user requests an upload. Credentials live in the project-local `.env`: run `python3 openwrite.py setup` to copy the tracked `.env.example` template (never overwritten, mode 600, Git-ignored), then fill in `WeChatAppID`, `WeChatAppSecret`, and optionally `WeChatAuthor`. The publisher no longer reads `~/.wechat-publisher/config.json`; the token cache stays at `~/.wechat-publisher/token_cache.json`. Never commit real secrets. Project-local skills still require setup for external services.
+`doctor` performs local checks only. `format` also converts code blocks for WeChat; use `--no-preformat` to preserve original code quotes and spacing. `publish` calls the WeChat API, requires HTML and a cover, and should run when the user requests an upload. Credentials live in the project-local `.env`: run `python3 openwrite.py setup` to copy the tracked `.env.example` template (never overwritten, mode 600, Git-ignored), then fill in `WeChatAppID`, `WeChatAppSecret`, and optionally `WeChatAuthor`. The publisher no longer reads `~/.wechat-publisher/config.json`; the token cache stays at `~/.wechat-publisher/token_cache.json`. Never commit real secrets. Rednote publishing reads `XhsCreatorCookie` from the same `.env`, defaults to private visibility, and needs an explicit `--public` for public notes. Project-local skills still require setup for external services.
 
 Workflow progress is persisted in `workflow.json` across seven stages. Submit the first five with `workflow complete`, inspect with `workflow status`, and redo with `workflow reset --from`. `workflow finalize` generates `article.md` (stage six); `format` produces the publishable artifact and completes stage seven. Between analysis and draft, a title/outline checkpoint requires user approval of three candidate titles and an outline (`outline.md` / `outline.json`), controlled by `OutlineApproval` in `.env` and skippable with `--skip-outline` when authorized. Root image, format and publish commands enforce prerequisite state; `publish` also requires the `publish-manifest.json` fingerprints to match the current artifacts. Low-level scripts remain independent.

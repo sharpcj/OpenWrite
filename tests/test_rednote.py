@@ -180,18 +180,20 @@ class RednotePipelineTests(unittest.TestCase):
             workflow.check_publishable(fresh, long_state)
         self.assertIn('标题超过 20 字符', str(error.exception))
 
-    def test_publish_is_blocked_because_upload_adapter_is_missing(self):
+    def test_publish_dispatches_card_set_to_adapter(self):
         finish(self.article)
         workflow.complete_format(self.article, 'indigo', False,
                                  workflow.check_publishable(self.article, workflow.load(self.article)))
-        args = Namespace(article=str(self.article), title=None, author=None, digest=None)
-        with patch.object(cli, 'run_skill') as execute:
-            with self.assertRaises(ValueError) as error:
-                cli.publish_article(args)
-            execute.assert_not_called()
-        self.assertIn('上传适配器尚未实现', str(error.exception))
+        args = Namespace(article=str(self.article), title=None, author=None, digest=None,
+                         public=False, dry_run=False, headed=False)
+        with patch.object(cli, 'run_skill', return_value=0) as execute:
+            self.assertEqual(cli.publish_article(args), 0)
+        name, entry, *arguments = execute.call_args.args
+        self.assertEqual((name, entry), ('rednote-publisher', 'publish_note.py'))
+        self.assertIn('--desc', arguments)
+        self.assertNotIn('--public', arguments)
 
-    def test_cli_seventh_stage_reports_manual_publish(self):
+    def test_cli_seventh_stage_reports_publish_ready(self):
         project = self.article / 'project'
         project.mkdir()
         for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py'):
@@ -205,7 +207,7 @@ class RednotePipelineTests(unittest.TestCase):
                                  'format', str(article)], cwd=project, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('已组装可发布产物', result.stdout)
-        self.assertIn('请手动发布', result.stdout)
+        self.assertIn('上传仍需用户明确确认', result.stdout)
         status = subprocess.run([sys.executable, '-B', str(project / 'openwrite.py'),
                                  'workflow', 'status', str(article)], cwd=project,
                                 capture_output=True, text=True)

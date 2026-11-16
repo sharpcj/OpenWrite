@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>发布笔记（测试模拟页）</title>
+</head>
+<body>
+<!-- 本地测试夹具：模拟创作服务平台发布页的关键结构，不代表真实站点 DOM。 -->
+<div id="app">
+  <div id="login" hidden>
+    <h2>扫码登录</h2>
+    <p>请使用小红书 App 扫码</p>
+  </div>
+  <div id="creator" hidden>
+    <input type="file" id="upload" accept="image/png" multiple>
+    <div id="editor" hidden>
+      <input id="title" placeholder="填写标题更容易上热门" maxlength="20">
+      <div class="ql-editor" contenteditable="true"></div>
+      <div id="topic-suggest" hidden></div>
+      <div id="privacy">
+        <label><input type="radio" name="privacy" value="public">公开</label>
+        <label><input type="radio" name="privacy" value="private">仅自己可见</label>
+      </div>
+      <button id="publish">发布</button>
+    </div>
+    <div id="result" hidden></div>
+  </div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const login = document.getElementById('login');
+const creator = document.getElementById('creator');
+if (params.get('login') === '1') {
+  login.hidden = false;
+} else {
+  creator.hidden = false;
+}
+const editorBox = document.getElementById('editor');
+const editor = document.querySelector('.ql-editor');
+const suggest = document.getElementById('topic-suggest');
+const result = document.getElementById('result');
+window.__uploaded = 0;
+window.__payload = null;
+window.__topics = [];
+document.getElementById('upload').addEventListener('change', (event) => {
+  window.__uploaded = event.target.files.length;
+  editorBox.hidden = false;
+});
+editor.addEventListener('input', () => {
+  const text = editor.innerText;
+  const match = text.match(/#([^\s#]+)$/);
+  suggest.innerHTML = '';
+  if (match) {
+    const name = match[1];
+    const item = document.createElement('button');
+    item.className = 'topic-item';
+    item.textContent = name;
+    item.addEventListener('click', () => {
+      editor.innerText = text.slice(0, text.length - match[0].length) + '#' + name + '[话题]# ';
+      window.__topics.push(name);
+      suggest.hidden = true;
+      suggest.innerHTML = '';
+    });
+    suggest.appendChild(item);
+    suggest.hidden = false;
+  } else {
+    suggest.hidden = true;
+  }
+});
+document.getElementById('publish').addEventListener('click', () => {
+  const privacy = document.querySelector('input[name="privacy"]:checked');
+  if (!privacy) {
+    result.hidden = false;
+    result.textContent = '请选择可见范围';
+    return;
+  }
+  window.__payload = {
+    title: document.getElementById('title').value,
+    desc: editor.innerText,
+    privacy: privacy.value,
+    uploaded: window.__uploaded,
+    topics: window.__topics.slice(),
+  };
+  if (params.get('fail') === '1') {
+    result.hidden = false;
+    result.textContent = '发布失败：内容审核未通过';
+    return;
+  }
+  result.hidden = false;
+  result.textContent = '发布成功';
+  location.hash = '#/note-manager?note_id=mocknote123';
+});
+</script>
+</body>
+</html>

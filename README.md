@@ -45,6 +45,7 @@ OpenWrite/
 │   ├── wechat-product-manager-writer/
 │   ├── wechat-article-formatter/
 │   ├── wechat-draft-publisher/
+│   ├── rednote-publisher/
 │   └── openwrite-images/
 ├── articles/                       # 每篇文章独立目录，默认不提交 Git
 └── tests/                          # 工作区命令验证
@@ -61,6 +62,7 @@ OpenWrite/
 | [wechat-article-formatter](skills/wechat-article-formatter/SKILL.md) | Markdown 转公众号 HTML，四套 YAML 主题 |
 | [openwrite-images](skills/openwrite-images/SKILL.md) | 接收配图需求，获取、校验并保存图片；集中管理后端，含卡片 `html` 渲染 |
 | [wechat-draft-publisher](skills/wechat-draft-publisher/SKILL.md) | 上传封面、正文图片和微信草稿 |
+| [rednote-publisher](skills/rednote-publisher/SKILL.md) | 发布小红书笔记：默认仅自己可见，公开需显式授权，支持 dry-run 预演 |
 
 ## 默认平台与写作视角
 
@@ -75,7 +77,7 @@ python3 openwrite.py new my-topic --title "文章主题"
 python3 openwrite.py new product-topic --title "产品主题" --perspective product
 ```
 
-选择写入任务状态，继续任务不受后来默认配置修改影响。小红书已接入 P0（写作与卡片产物），上传适配器尚未实现，需手动发布。详见 [平台与视角选择](docs/task-selection.md)。
+选择写入任务状态，继续任务不受后来默认配置修改影响。小红书已完整接入（写作、卡片产物与发布）；发布默认仅自己可见，公开需显式 `--public` 授权。详见 [平台与视角选择](docs/task-selection.md)。
 
 平台差异统一登记在 `platforms.py` 注册表（产物形态、尺寸、张数、上限、渲染与发布 Skill），流程控制器与命令入口只查表。`implemented` 管写作到可发布产物，`publish_implemented` 管上传，两者独立；接入清单与分阶段路线见 [平台适配器契约](docs/platforms.md)。
 
@@ -210,6 +212,8 @@ WeChatAuthor=你的作者名
 ```
 
 `.env` 已被 `.gitignore` 忽略，`setup` 会将其权限设为 600；不要把真实密钥写入 `.env.example` 或提交到仓库。未配置凭证时 `publish` 会报错并给出上述指引，不再读取 `~/.wechat-publisher/config.json`。access_token 缓存仍在 `~/.wechat-publisher/token_cache.json`。
+
+小红书发布凭证同样写在 `.env`：`XhsCreatorCookie` 为登录 https://creator.xiaohongshu.com 后复制的完整 Cookie（需含 `a1` 与登录凭证）。发布默认「仅自己可见」，公开需显式 `--public`；可先 `--dry-run` 预演。Cookie 会过期，失效时重新复制；未配置时 `publish` 在启动浏览器前报错。
 
 Skill 是项目级的，无需全局安装；仍需配置实际使用的图片来源或公众号等外部服务。发布器创建草稿，最终群发在微信后台操作。
 

@@ -37,9 +37,9 @@ OpenWrite 的流程秩序是平台中立的，产物形态按平台分派。本�
 | 平台 | 可选择 | 写作→可发布产物 | 上传 | 产物形态 |
 |---|---|---|---|---|
 | 微信 `wechat` | ✅ | ✅ | ✅ | 长文：`article.md` → `article.html` + `cover.png`（1024×432，不嵌正文） |
-| 小红书 `rednote` | ✅ | ✅ P0 | ❌ 未实现 | 图文：`note.md` + `cards.md` → 3:4 组图（1080×1440，封面即首图） |
+| 小红书 `rednote` | ✅ | ✅ | ✅ | 图文：`note.md` + `cards.md` → 3:4 组图（1080×1440，封面即首图） |
 
-小红书写作与卡片产物已实现（P0）：卡片由 `openwrite-images` 的 `html` 后端渲染，第七步只组装与校验。**上传适配器未实现**，`publish_implemented: false`，`publish` 会在调用任何外部接口前拒绝，需用户手动发布。
+小红书写作、卡片产物与发布适配器均已实现：卡片由 `openwrite-images` 的 `html` 后端渲染，第七步只组装与校验；发布由 `rednote-publisher` 通过创作服务平台发布页自动化完成（Playwright，站点自身签名），**默认仅自己可见，公开需显式 `--public` 授权**，支持 `--dry-run` 预演。
 
 `implemented` 与 `publish_implemented` 是两个独立开关：前者管写作到可发布产物，后者管上传。可发布产物就绪不等于存在上传路径。
 
@@ -50,18 +50,17 @@ OpenWrite 的流程秩序是平台中立的，产物形态按平台分派。本�
 - 代码块必须转换为微信兼容格式（检查 HTML 中不得残留 `<pre`）。
 - 发布走官方 API，凭证为 `.env` 的 `WeChatAppID` / `WeChatAppSecret` / `WeChatAuthor`。
 
-### 小红书（P0 已实现写作与卡片产物）
+### 小红书（写作、卡片产物与发布均已实现）
 
 已核实规格：
 
 - 画布 **1080×1440（3:4）**，文字类导出 PNG。
 - 安全区：侧边 72–96px、上 72–112px、下 80–120px，文字与关键对象须在安全区内。
 - 标题 ≤20 字；封面大标题 ≤15 字；内容页标题 12–30 字，配 2–4 条短片段或一段简洁文字。
+- 常规图文笔记正文 ≤1000 字（话题以 `#名称[话题]#` 计入）、单篇图片 ≤18 张（封面 + 内容，注册表 `content_images.max: 17`）。多个公开来源一致；「长文笔记」6000 字为另一内测功能，不适用本组图形态。
 - 一页一个观点；有截图时减少文字并给足截图面积。
-- **张数由内容动态决定**（注册表 `min: 1`、`max: null`），不固定 4~8 张。
-- 发布凭证为创作服务平台 Cookie（`XhsCreatorCookie`），默认「仅自己可见」，公开需显式授权——**上传适配器尚未实现**。
-
-**正文长度上限与单篇图片上限未取得权威来源**，记录在 `unverified: ['desc_chars', 'max_images']`，需实测后再写入 `limits`，不凭印象写死。
+- **张数由内容动态决定**（注册表 `min: 1`、`max: 17`），不固定 4~8 张。
+- 发布凭证为创作服务平台 Cookie（`XhsCreatorCookie`，需含 `a1` 与登录凭证），默认「仅自己可见」，公开需显式授权。
 
 与微信的两处语义差异（已实现）：
 
@@ -110,7 +109,7 @@ skills/
 ├── rednote-note-writer/          # 已实现：标题钩子、短文案、话题、卡片分页稿
 ├── openwrite-images/             # 已实现：html 后端 + render_card.py + 卡片模板
 │   └── references/card-rendering.md
-└── rednote-publisher/            # 未实现（P1）：Cookie 签名发布，dry-run，默认仅自己可见
+└── rednote-publisher/            # 已实现（P1）：发布页自动化，dry-run，默认仅自己可见
 
 articles/<名称>/
 ├── note.md                   # 笔记文案：标题 + 正文 + 话题
@@ -125,15 +124,15 @@ articles/<名称>/
 
 ## 分阶段路线
 
-- **P0｜写作 + 卡片产物（不含自动上传）**：✅ 已完成。注册表分派 → `rednote-note-writer` → `html` 后端渲染卡片 → 第七步组装与校验 → `publish-manifest.json`。交付即「组图 + 文案」，用户手动发布，零平台风控风险。
-- **P1｜发布适配器**：待做。Cookie 配置、`dry-run`、默认仅自己可见、用户授权闸门；完成后置 `publish_implemented: true`。
+- **P0｜写作 + 卡片产物（不含自动上传）**：✅ 已完成。注册表分派 → `rednote-note-writer` → `html` 后端渲染卡片 → 第七步组装与校验 → `publish-manifest.json`。
+- **P1｜发布适配器**：✅ 已完成。`XhsCreatorCookie` 配置、`--dry-run` 预演、默认仅自己可见（失败即中止）、`--public` 显式授权、失败截图与可恢复重试；`publish_implemented: true`。实现为独立编写的 Playwright 发布页自动化（站点自身签名，不引入 Node.js）；UI 流程用本地模拟页做端到端测试，真实账号首次使用建议先私密实测。
 - **P2｜运营增强（可选）**：选题灵感、爆款拆解、知识库沉淀。
 
 ## 风险与许可证
 
-- 小红书官方已发布治理 AI 托管运营账号的公告；接入上传前须让用户知情授权，默认仅自己可见，公开需显式开关。
-- 无官方开放 API，Cookie 会过期且有风控；发布失败必须可恢复，不得声称已发布。P0 不提供上传，因此不涉及该风险。
-- 参考项目许可证：`Auto-Redbook-Skills` 为 MIT（可参考/复用，保留版权声明；其发布实现提取自 `Spider_XHS`，上游许可证需另行核实）；`guizang-social-card-skill` 为 **AGPL-3.0，不得并入本 MIT 项目**，只能借鉴思路独立实现。本项目卡片模板与渲染脚本为自行编写。
-- 卡片渲染使用 **Python 版 Playwright + Chromium**，不引入 Node.js。依赖已写入 `requirements.txt`，浏览器需一次性 `python -m playwright install chromium`；`doctor` 会报告就绪状态，缺依赖时只提示不自动下载。
+- 小红书官方已发布治理 AI 托管运营账号的公告；发布前须让用户知情授权，默认仅自己可见，公开需显式开关。
+- 无官方开放 API，Cookie 会过期且有风控；发布失败必须可恢复，不得声称已发布。适配器以站点成功信号为准报告结果，失败保留截图。
+- 参考项目许可证（已核实）：`Auto-Redbook-Skills` 为 MIT，仅借鉴其默认私密 + 显式公开的产品设计与 Cookie 字段要求；其 vendored 发布运行时提取自 `Spider_XHS`，而 **`Spider_XHS` 无许可证（license: null，保留所有权利）**，不得复制其代码、JS 或指纹材料。`guizang-social-card-skill` 为 **AGPL-3.0，不得并入本 MIT 项目**。本项目发布器与卡片模板均为独立编写，仅参考公开的协议事实（页面地址、可见性语义）。
+- 发布与卡片渲染均使用 **Python 版 Playwright + Chromium**，不引入 Node.js。依赖已写入 `requirements.txt`，浏览器需一次性 `python -m playwright install chromium`；`doctor` 会报告就绪状态，缺依赖时只提示不自动下载。
 
 阶段协议见 [七步工作流](workflow.md)，配图协议见 [配图交接协议](image-contract.md)，平台与视角选择见 [选择规则](task-selection.md)。

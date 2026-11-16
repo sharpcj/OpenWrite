@@ -161,6 +161,12 @@ def publish_article(args: argparse.Namespace) -> int:
     directory = article_directory(args.article)
     manifest = workflow.require_publishable(directory)
     profile = platforms.require_publish_adapter(workflow.load(directory))
+    if args.title and args.title != manifest['title']:
+        print(f'注意：本次标题覆盖发布清单中的「{manifest["title"]}」')
+    if profile['rendered_artifact'] is None:
+        return publish_card_set(args, directory, manifest, profile)
+    if args.public or args.dry_run or args.headed:
+        raise ValueError('--public / --dry-run / --headed 仅支持小红书图文发布')
     content = directory / profile['rendered_artifact']
     cover = directory / profile['cover']['output']
     for path in (content, cover):
@@ -169,13 +175,31 @@ def publish_article(args: argparse.Namespace) -> int:
     title = args.title or manifest['title']
     author = args.author if args.author is not None else manifest.get('author') or None
     digest = args.digest if args.digest is not None else manifest.get('digest') or None
-    if args.title and args.title != manifest['title']:
-        print(f'注意：本次标题覆盖发布清单中的「{manifest["title"]}」')
     arguments = ['--title', title, '--content', str(content), '--cover', str(cover)]
     if author:
         arguments.extend(['--author', author])
     if digest:
         arguments.extend(['--digest', digest])
+    return run_skill(profile['publisher'], profile['publisher_entry'], *arguments)
+
+
+def publish_card_set(args: argparse.Namespace, directory: Path, manifest: dict, profile: dict) -> int:
+    """组图平台：按发布清单顺序上传卡片与笔记文案；默认仅自己可见。"""
+    images = [directory / name for name in manifest['images']]
+    for path in images:
+        if not path.is_file():
+            raise ValueError(f'发布所需文件不存在：{path}')
+    arguments = ['--title', args.title or manifest['title'],
+                 '--desc', manifest['desc'], '--images', *(str(path) for path in images),
+                 '--project-root', str(ROOT), '--artifact-dir', str(directory)]
+    if manifest.get('topics'):
+        arguments.extend(['--topics', *manifest['topics']])
+    if args.public:
+        arguments.append('--public')
+    if args.dry_run:
+        arguments.append('--dry-run')
+    if args.headed:
+        arguments.append('--headed')
     return run_skill(profile['publisher'], profile['publisher_entry'], *arguments)
 
 
@@ -384,6 +408,12 @@ def main(argv: list[str] | None = None) -> int:
     publish.add_argument('--title', help='默认使用 publish-manifest.json 中已确认的标题')
     publish.add_argument('--author', help='默认使用清单作者（来自 .env 的 WeChatAuthor）')
     publish.add_argument('--digest', help='默认使用清单摘要')
+    publish.add_argument('--public', action='store_true',
+                         help='小红书公开发布；默认仅自己可见，公开需用户明确授权')
+    publish.add_argument('--dry-run', action='store_true',
+                         help='小红书发布预演：仅本地校验，不登录、不上传、不发布')
+    publish.add_argument('--headed', action='store_true',
+                         help='小红书发布使用有头浏览器，便于观察过程或协助登录')
     publish.set_defaults(action=publish_article)
     args = parser.parse_args(argv)
     try:

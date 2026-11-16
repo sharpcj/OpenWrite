@@ -89,7 +89,8 @@ class WorkspaceTests(unittest.TestCase):
     def test_publish_requires_cover_before_invoking_remote_script(self):
         finish_article(self.directory)
         (self.directory / 'cover.png').unlink()
-        args = Namespace(article=str(self.directory), title='标题', author=None, digest=None)
+        args = Namespace(article=str(self.directory), title='标题', author=None, digest=None,
+                         public=False, dry_run=False, headed=False)
         with patch.object(workspace, 'run_skill') as execute:
             with self.assertRaises(ValueError):
                 workspace.publish_article(args)
@@ -99,7 +100,8 @@ class WorkspaceTests(unittest.TestCase):
         finish_article(self.directory)
         (self.directory / 'article.html').write_text('<p>正文</p>')
         workflow.complete_format(self.directory, 'default', True, {})
-        args = Namespace(article=str(self.directory), title='指定标题', author='作者', digest='摘要')
+        args = Namespace(article=str(self.directory), title='指定标题', author='作者', digest='摘要',
+                         public=False, dry_run=False, headed=False)
         with patch.object(workspace, 'run_skill', return_value=0) as execute:
             self.assertEqual(workspace.publish_article(args), 0)
         passed = execute.call_args.args

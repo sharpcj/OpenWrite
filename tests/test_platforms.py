@@ -35,27 +35,27 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(profile['checks']['code_blocks_converted'])
         self.assertEqual(profile['author_key'], 'WeChatAuthor')
 
-    def test_rednote_writing_pipeline_is_implemented_but_upload_is_not(self):
+    def test_rednote_writing_and_upload_adapters_are_implemented(self):
         profile = platforms.spec('rednote')
         self.assertTrue(profile['implemented'])
-        self.assertFalse(profile['publish_implemented'])
+        self.assertTrue(profile['publish_implemented'])
         self.assertEqual(profile['format_label'], '组装并保存可发布产物')
         self.assertEqual(profile['limits']['title_chars'], 20)
         self.assertEqual((profile['cover']['width'], profile['cover']['height']), (1080, 1440))
         self.assertEqual(profile['cover']['output'], 'xhs-01-cover.png')
         self.assertEqual(profile['content_size'], {'width': 1080, 'height': 1440})
-        # 张数动态：必需正文卡片，但不固定上下限。
+        # 张数动态：必需正文卡片；封面 + 内容合计不超过平台 18 张上限。
         self.assertTrue(profile['content_images']['required'])
         self.assertEqual(profile['content_images']['min'], 1)
-        self.assertIsNone(profile['content_images']['max'])
+        self.assertEqual(profile['content_images']['max'], 17)
         self.assertEqual(profile['markdown_artifact'], 'note.md')
         self.assertIsNone(profile['rendered_artifact'])
         self.assertEqual(profile['renderer'], 'openwrite-images')
         self.assertFalse(profile['checks']['code_blocks_converted'])
-        # 未取得权威来源的项不得进入强制 limits。
-        self.assertEqual(set(profile['unverified']), {'desc_chars', 'max_images'})
-        self.assertNotIn('desc_chars', profile['limits'])
-        self.assertNotIn('max_images', profile['limits'])
+        # 常规图文笔记规格已由多个公开来源核实并写入 limits。
+        self.assertEqual(profile['unverified'], [])
+        self.assertEqual(profile['limits']['desc_chars'], 1000)
+        self.assertEqual(profile['limits']['max_images'], 18)
 
     def test_step_labels_are_platform_specific(self):
         wechat = platforms.step_labels({'platform': 'wechat'})
@@ -111,17 +111,16 @@ class PipelineGateTests(unittest.TestCase):
         self.assertEqual(profile['label'], '微信')
         workflow.complete(self.article, 'search')
 
-    def test_rednote_can_write_but_upload_adapter_is_still_missing(self):
+    def test_rednote_write_and_upload_adapters_are_available(self):
         self.start('rednote')
         state = workflow.load(self.article)
         self.assertEqual(state['platform'], 'rednote')
         # 写作门禁已放行。
         self.assertEqual(platforms.require_pipeline(state)['label'], '小红书')
         workflow.complete(self.article, 'search')
-        # 上传适配器未实现，publish 仍被拒绝。
-        with self.assertRaises(ValueError) as error:
-            platforms.require_publish_adapter(workflow.load(self.article))
-        self.assertIn('上传适配器尚未实现', str(error.exception))
+        # P1 发布适配器已接入。
+        profile = platforms.require_publish_adapter(workflow.load(self.article))
+        self.assertEqual(profile['publisher'], 'rednote-publisher')
         self.assertEqual(workflow.load(self.article)['platform'], 'rednote')
 
     def test_wechat_upload_adapter_is_available(self):

@@ -26,7 +26,7 @@
 
 ## 初始化与查看
 
-新任务及 `workflow init` 按 [平台与视角规则](task-selection.md) 只读取本地 `.env`（`.env.example` 仅是 `setup` 用的模板）；提示词明确指定值由 Agent 转为参数。默认微信与自媒体博主。已保存任务继续沿用原选择。小红书已接入 P0（写作与卡片产物），上传适配器尚未实现；任务按图文形态推进，不会套用微信长文规则。
+新任务及 `workflow init` 按 [平台与视角规则](task-selection.md) 只读取本地 `.env`（`.env.example` 仅是 `setup` 用的模板）；提示词明确指定值由 Agent 转为参数。默认微信与自媒体博主。已保存任务继续沿用原选择。小红书已完整接入（写作、卡片产物与发布）；任务按图文形态推进，不会套用微信长文规则。
 
 ```bash
 python3 openwrite.py new rag-guide --title "RAG 入门" --type tech
@@ -193,7 +193,7 @@ python3 openwrite.py publish articles/rag-guide
 
 `publish` 要求七步完成，且 `publish-manifest.json` 记录的指纹与当前产物完全一致；标题默认取清单中已确认的值，`--title` / `--author` / `--digest` 可显式覆盖。产物在确认后被修改时旧确认失效，必须重新排版并重新取得用户确认。微信凭证来自项目 `.env`，未配置时在调用微信 API 之前报错。
 
-**小红书上传适配器尚未实现**：七步完成后产物即可发布，但 `publish` 会拒绝并提示手动发布，不会调用任何外部接口。
+**小红书发布**：七步完成后 `publish` 按清单顺序上传组图与笔记文案，默认「仅自己可见」；公开需用户显式 `--public`，可先 `--dry-run` 预演（仅本地校验，不登录不发布）。凭证为 `.env` 的 `XhsCreatorCookie`，未配置或失效时在发布前报错。只有观察到站点成功信号才报告已发布；失败保留截图，可修正后重试。
 
 ## 返工与恢复
 

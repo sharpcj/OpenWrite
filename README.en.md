@@ -40,6 +40,7 @@ OpenWrite/
 │   ├── rednote-note-writer/
 │   ├── wechat-article-formatter/
 │   ├── wechat-draft-publisher/
+│   ├── rednote-publisher/
 │   └── openwrite-images/
 ├── articles/
 └── tests/
@@ -98,7 +99,7 @@ Backend code, configuration, and workflows live only in `skills/openwrite-images
 
 Rednote card rendering needs Playwright plus a one-time browser download (`python3 -m playwright install chromium`); it runs locally and offline afterwards. `doctor` reports its readiness. WeChat-only tasks do not need it.
 
-WeChat credentials share the project configuration: `.env.example` is a tracked placeholder template, and real values live in the local `.env`. Run `python3 openwrite.py setup` to copy the template (existing files are never overwritten; the copy gets mode 600 and is Git-ignored), then fill in `WeChatAppID`, `WeChatAppSecret`, and optionally `WeChatAuthor`. Never put real secrets into `.env.example`. Without credentials, `publish` fails with these instructions instead of reading `~/.wechat-publisher/config.json`; the access-token cache remains at `~/.wechat-publisher/token_cache.json`. Project-local skills do not remove external-service setup requirements. Publishing creates a WeChat draft rather than sending the article to subscribers.
+WeChat credentials share the project configuration: `.env.example` is a tracked placeholder template, and real values live in the local `.env`. Run `python3 openwrite.py setup` to copy the template (existing files are never overwritten; the copy gets mode 600 and is Git-ignored), then fill in `WeChatAppID`, `WeChatAppSecret`, and optionally `WeChatAuthor`. Never put real secrets into `.env.example`. Without credentials, `publish` fails with these instructions instead of reading `~/.wechat-publisher/config.json`; the access-token cache remains at `~/.wechat-publisher/token_cache.json`. Rednote publishing uses `XhsCreatorCookie` in the same `.env` (the full cookie copied from a logged-in creator.xiaohongshu.com session); it defaults to private visibility, requires an explicit `--public` for public notes, and supports `--dry-run`. Project-local skills do not remove external-service setup requirements. Publishing creates a WeChat draft rather than sending the article to subscribers; a Rednote note is published with the visibility the user explicitly chose.
 
 ## Validation and attribution
 
@@ -130,6 +131,6 @@ Runtime configuration is read only from the local `.env`; `.env.example` is a sa
 
 Explicit user choices, passed by the agent as `--platform wechat|rednote` and `--perspective blogger|tech|product`, win over configuration. For the platform, if no single option is enabled and the user has not specified one, the command refuses to create a task and asks for an explicit choice. The writer role falls back to `SelfMediaBlogger` when `WriterRole` is absent or empty, so it never needs confirmation. The two dimensions resolve independently.
 
-Run `python3 openwrite.py preferences` to inspect the resolved defaults. Task choices are persisted in `workflow.json`; changing the defaults does not change existing work. Rednote has P0 implemented (writing and card artifacts); its upload adapter is not implemented, so publishing is manual. See [selection rules](docs/task-selection.md).
+Run `python3 openwrite.py preferences` to inspect the resolved defaults. Task choices are persisted in `workflow.json`; changing the defaults does not change existing work. Rednote is fully implemented (writing, card artifacts, and publishing); publishing defaults to private visibility and requires an explicit `--public` for public notes. See [selection rules](docs/task-selection.md).
 
 Platform differences live in the `platforms.py` registry (artifact shape, dimensions, image counts, limits, renderer and publisher skills); the controller and command entry only read that table. `implemented` covers writing through the publishable artifact, `publish_implemented` covers uploading; the two are independent. See the [platform adapter contract](docs/platforms.md) for the onboarding checklist and phased roadmap.

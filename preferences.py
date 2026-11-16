@@ -24,12 +24,15 @@ ENV_NAME = '.env'
 FEATURES = {'OutlineApproval': True}
 # WeChat publishing credentials; real values belong in .env, never in the template.
 CREDENTIALS = {'WeChatAppID': 'appid', 'WeChatAppSecret': 'appsecret', 'WeChatAuthor': 'author'}
+# Rednote creator-platform cookie; real values belong in .env, never in the template.
+XHS_CREDENTIALS = {'XhsCreatorCookie': 'cookie'}
 # Single-valued writer role; the legacy boolean perspective switches are rejected.
 WRITER_ROLE_KEY = 'WriterRole'
 DEFAULT_WRITER_ROLE = 'SelfMediaBlogger'
-KNOWN_KEYS = set(PLATFORMS) | {WRITER_ROLE_KEY} | set(CREDENTIALS)
+KNOWN_KEYS = set(PLATFORMS) | {WRITER_ROLE_KEY} | set(CREDENTIALS) | set(XHS_CREDENTIALS)
 PLACEHOLDERS = {'', 'your_appid', 'your_appid_here', 'your_appsecret', 'your_appsecret_here',
-                'your_author', 'your_author_here', 'changeme'}
+                'your_author', 'your_author_here', 'changeme',
+                'your_cookie', 'your_cookie_here', 'your_xhs_cookie_here'}
 
 
 class ChoiceRequired(ValueError):
@@ -241,4 +244,25 @@ def require_wechat_credentials(root: Path) -> dict:
         f'  2. 编辑 {target}，填写 WeChatAppID 和 WeChatAppSecret，可选 WeChatAuthor\n'
         '  获取方式：https://mp.weixin.qq.com → 设置与开发 → 基本配置\n'
         f'  {ENV_NAME} 已被 Git 忽略，只保存在本机；{TEMPLATE_NAME} 仅是占位模板，不要写入真实密钥。'
+    )
+
+
+def xhs_cookie(root: Path) -> str:
+    """Read the creator-platform cookie from .env, treating placeholders as unset."""
+    value = read_values(root).get('XhsCreatorCookie', '').strip()
+    return '' if value.lower() in PLACEHOLDERS else value
+
+
+def require_xhs_cookie(root: Path) -> str:
+    cookie = xhs_cookie(root)
+    if cookie:
+        return cookie
+    target = root / ENV_NAME
+    raise ValueError(
+        '小红书创作服务平台 Cookie 未配置，无法发布笔记。\n'
+        f'  1. 在项目根目录运行：python3 openwrite.py setup（生成 {target}，不覆盖已有文件）\n'
+        f'  2. 编辑 {target}，填写 XhsCreatorCookie：浏览器登录 https://creator.xiaohongshu.com 后，\n'
+        '     打开开发者工具 → 网络，复制任一创作平台请求的完整 Cookie（需含 a1 与登录凭证）\n'
+        '  发布默认「仅自己可见」；公开需显式 --public 授权。Cookie 会过期，失效时重新复制。\n'
+        f'  {ENV_NAME} 已被 Git 忽略，只保存在本机；{TEMPLATE_NAME} 仅是占位模板，不要写入真实 Cookie。'
     )

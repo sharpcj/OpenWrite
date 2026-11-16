@@ -544,6 +544,7 @@ def check_card_set(article: Path, state: dict, title: str, cover_bytes: int, pro
     """组图平台：逐张校验尺寸与顺序，并核对笔记文案。"""
     from PIL import Image
     profile = platforms.for_state(state)
+    limits = profile['limits']
     try:
         parts = note_parts(article)
     except (OSError, ValueError) as exc:
@@ -551,12 +552,16 @@ def check_card_set(article: Path, state: dict, title: str, cover_bytes: int, pro
         parts = {'title': '', 'desc': '', 'topics': []}
     if parts['title'] and parts['title'] != title:
         problems.append('note.md 标题与已确认标题不一致')
+    if parts['desc'] and limits.get('desc_chars') and len(parts['desc']) > limits['desc_chars']:
+        problems.append(f'笔记正文超过 {limits["desc_chars"]} 字（当前 {len(parts["desc"])}）')
     expected = {
         profile['cover']['output']: (profile['cover']['width'], profile['cover']['height']),
     }
     for item in requests(article):
         if item['role'] == 'content':
             expected[item['output']] = (item['width'], item['height'])
+    if limits.get('max_images') and len(expected) > limits['max_images']:
+        problems.append(f'组图共 {len(expected)} 张，超过单篇 {limits["max_images"]} 张上限')
     for name, size in expected.items():
         path = article / name
         if not path.is_file():

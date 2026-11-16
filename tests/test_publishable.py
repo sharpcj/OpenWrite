@@ -111,7 +111,8 @@ class PublishableTests(unittest.TestCase):
         finish_article(self.article)
         (self.article / 'article.html').write_text('<p>正文</p>', encoding='utf-8')
         workflow.complete_format(self.article, 'default', True, {})
-        args = Namespace(article=str(self.article), title=None, author=None, digest=None)
+        args = Namespace(article=str(self.article), title=None, author=None, digest=None,
+                         public=False, dry_run=False, headed=False)
         with patch.object(cli, 'run_skill', return_value=0) as execute:
             self.assertEqual(cli.publish_article(args), 0)
         passed = execute.call_args.args
@@ -128,7 +129,8 @@ class PublishableTests(unittest.TestCase):
         finish_article(self.article)
         (self.article / 'article.html').write_text('<p>正文</p>', encoding='utf-8')
         workflow.complete_format(self.article, 'default', True, {})
-        args = Namespace(article=str(self.article), title='用户改的标题', author='作者', digest='摘要')
+        args = Namespace(article=str(self.article), title='用户改的标题', author='作者', digest='摘要',
+                         public=False, dry_run=False, headed=False)
         with patch.object(cli, 'run_skill', return_value=0) as execute:
             self.assertEqual(cli.publish_article(args), 0)
         passed = execute.call_args.args

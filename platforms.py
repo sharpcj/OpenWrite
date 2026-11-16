@@ -49,9 +49,9 @@ REGISTRY = {
     },
     REDNOTE: {
         'label': '小红书',
-        # P0：写作与卡片产物已实现；上传适配器未实现，publish 仍被拒绝。
+        # P1：写作、卡片产物与发布适配器均已实现；发布默认仅自己可见。
         'implemented': True,
-        'publish_implemented': False,
+        'publish_implemented': True,
         'writers': {'blogger': 'rednote-note-writer'},
         # 方案 A：卡片渲染是图片后端（html），不是独立的第七步排版器。
         'renderer': 'openwrite-images',
@@ -65,11 +65,14 @@ REGISTRY = {
         'optional_artifacts': [],
         'cover': {'id': 'cover', 'output': 'xhs-01-cover.png', 'width': 1080, 'height': 1440},
         'content_size': {'width': 1080, 'height': 1440},
-        # 张数由内容动态决定；平台单篇上限待核实，先不写死。
-        'content_images': {'required': True, 'min': 1, 'max': None},
+        # 张数由内容动态决定；封面 + 内容合计不超过平台单篇 18 张上限。
+        'content_images': {'required': True, 'min': 1, 'max': 17},
         'limits': {
             'title_chars': 20, 'title_bytes': None,
             'author_bytes': None, 'digest_bytes': None,
+            # 常规图文笔记：正文 ≤1000 字、单篇 ≤18 张图（多个公开来源一致；
+            # 「长文笔记」6000 字为另一内测功能，不适用本组图形态）。
+            'desc_chars': 1000, 'max_images': 18,
             'cover_bytes': None,
         },
         'checks': {'code_blocks_converted': False, 'local_images_exist': True},
@@ -82,8 +85,7 @@ REGISTRY = {
             'page_title_chars': (12, 30),
             'export': 'PNG',
         },
-        # 未取得权威来源的项不写入强制 limits，需实测后再补。
-        'unverified': ['desc_chars', 'max_images'],
+        'unverified': [],
     },
 }
 
