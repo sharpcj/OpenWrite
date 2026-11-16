@@ -44,8 +44,7 @@ class PublishableTests(unittest.TestCase):
         with self.assertRaises(ValueError) as error:
             workflow.check_publishable(self.article, dict(state, title='长' * 65), self.staged('<p>正文</p>'))
         self.assertIn('标题超过', str(error.exception))
-        with patch.object(workflow.preferences, 'wechat_credentials',
-                          return_value={'appid': '', 'appsecret': '', 'author': '作者' * 20}):
+        with patch.object(workflow.preferences, 'credential_value', return_value='作者' * 20):
             with self.assertRaises(ValueError) as error:
                 workflow.check_publishable(self.article, state, self.staged('<p>正文</p>'))
         self.assertIn('作者名超过', str(error.exception))
@@ -91,6 +90,22 @@ class PublishableTests(unittest.TestCase):
         workflow.reset(self.article, 'format')
         self.assertEqual(workflow.current(workflow.load(self.article)), 'format')
         self.assertTrue((self.article / 'article.html').is_file())
+
+    def test_cover_is_always_fingerprinted_even_if_not_listed_in_artifacts(self):
+        finish_article(self.article, content=True)
+        (self.article / 'article.html').write_text('<p>正文</p>', encoding='utf-8')
+        names = workflow.publishable_files(self.article)
+        self.assertIn('cover.png', names)
+        self.assertIn('diagram.png', names)
+        # A platform whose artifact list omits the cover (e.g. a card set) must
+        # still fingerprint it, because the cover is always uploaded.
+        profile = workflow.platforms.spec('wechat')
+        original = profile['artifacts']
+        try:
+            profile['artifacts'] = [n for n in original if n != 'cover.png']
+            self.assertIn('cover.png', workflow.publishable_files(self.article))
+        finally:
+            profile['artifacts'] = original
 
     def test_publish_uses_manifest_metadata_and_rejects_changed_artifacts(self):
         finish_article(self.article)

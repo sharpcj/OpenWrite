@@ -67,3 +67,5 @@ python3 openwrite.py new chosen-note --platform wechat --perspective tech
 写作流程检查点也由 `.env` 配置：`OutlineApproval=true`（默认）要求分析后、写正文前取得用户对三个备选标题与大纲的确认；设为 `false` 表示用户授权跳过。该值在 `new` / `workflow init` 时写入任务的 `outline_approval`，与平台、视角一样不随后续配置修改而改变；单次任务也可用 `--skip-outline` 显式授权跳过。
 
 配置和任务可以记录 `rednote`，但小红书的创作、格式化及发布适配尚未实现。对应任务会明确显示此限制，并拒绝推进微信工作流、微信格式化或微信发布。选择解析完成不代表平台能力已接入。
+
+平台产物规格与适配器接线统一登记在根目录 `platforms.py`：微信 `implemented: true`，小红书规格已核实但 `implemented: false`。门禁通过 `platforms.require_pipeline()` 判断，不再硬编码单一平台。新增平台的接入清单与分阶段路线见 [平台适配器契约](platforms.md)。

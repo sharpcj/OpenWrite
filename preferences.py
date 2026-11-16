@@ -187,6 +187,14 @@ def set_env_value(root: Path, key: str, value: str) -> Path:
     return target
 
 
+def credential_value(root: Path, key: str) -> str:
+    """Read one credential from .env, treating placeholders as unset."""
+    if not key:
+        return ''
+    value = read_values(root).get(key, '').strip()
+    return '' if value.lower() in PLACEHOLDERS else value
+
+
 def wechat_credentials(root: Path) -> dict:
     """Read publishing credentials from the local .env only."""
     values = read_values(root)

@@ -11,18 +11,19 @@ import subprocess
 import sys
 
 import workflow
+import platforms
 import preferences
 
 ROOT = Path(__file__).resolve().parent
 SKILLS = ROOT / 'skills'
-SKILL_NAMES = (
-    'wechat-tech-writer',
-    'wechat-blogger-writer',
-    'wechat-product-manager-writer',
-    'wechat-article-formatter',
-    'wechat-draft-publisher',
-    'openwrite-images',
-)
+# Neutral capabilities plus every implemented platform's skills, derived from the registry.
+SKILL_NAMES = tuple(dict.fromkeys(
+    ['openwrite-images'] + [
+        skill
+        for profile in platforms.REGISTRY.values() if profile['implemented']
+        for skill in [*profile['writers'].values(), profile['renderer'], profile['publisher']]
+    ]
+))
 
 
 def run_skill(name: str, script: str, *arguments: str) -> int:
@@ -80,28 +81,40 @@ def article_directory(value: str) -> Path:
     return directory
 
 
+def render_wechat(directory: Path, state: dict, args: argparse.Namespace, staged: Path) -> int:
+    """WeChat adapter: Markdown -> inline-style HTML -> WeChat code blocks."""
+    profile = platforms.for_state(state)
+    markdown = directory / profile['markdown_artifact']
+    extra = ['--no-preformat'] if args.no_preformat else []
+    result = run_skill(
+        profile['renderer'], 'scripts/markdown_to_html.py',
+        '--input', str(markdown), '--output', str(staged), '--theme', args.theme, *extra,
+    )
+    if result:
+        return result
+    return run_skill(profile['renderer'], 'scripts/convert-code-blocks.py', str(staged), str(staged))
+
+
+# Product-layer adapters are registered per platform; the controller stays neutral.
+RENDERERS = {platforms.WECHAT: render_wechat}
+
+
 def format_article(args: argparse.Namespace) -> int:
     directory = article_directory(args.article)
     state = workflow.require_format_stage(directory)
-    markdown = directory / 'article.md'
-    output = directory / 'article.html'
+    profile = platforms.for_state(state)
+    render = RENDERERS.get(preferences.task_platform(state))
+    if render is None or not profile['rendered_artifact']:
+        raise ValueError(f'{profile["label"]}排版适配器尚未实现，无法生成可发布产物')
+    markdown = directory / profile['markdown_artifact']
+    output = directory / profile['rendered_artifact']
     if not markdown.is_file():
         raise ValueError(f'正文文件不存在：{markdown}')
-    # Preserve an existing successful HTML if conversion or any check fails.
+    # Preserve an existing successful artifact if conversion or any check fails.
     import tempfile
     with tempfile.TemporaryDirectory(prefix='openwrite-format-') as tmp:
-        staged = Path(tmp) / 'article.html'
-        extra = ['--no-preformat'] if args.no_preformat else []
-        result = run_skill(
-            'wechat-article-formatter', 'scripts/markdown_to_html.py',
-            '--input', str(markdown), '--output', str(staged), '--theme', args.theme, *extra,
-        )
-        if result:
-            return result
-        result = run_skill(
-            'wechat-article-formatter', 'scripts/convert-code-blocks.py',
-            str(staged), str(staged),
-        )
+        staged = Path(tmp) / output.name
+        result = render(directory, state, args, staged)
         if result:
             return result
         checks = workflow.check_publishable(directory, state, staged)
@@ -116,8 +129,9 @@ def format_article(args: argparse.Namespace) -> int:
 def publish_article(args: argparse.Namespace) -> int:
     directory = article_directory(args.article)
     manifest = workflow.require_publishable(directory)
-    content = directory / 'article.html'
-    cover = directory / 'cover.png'
+    profile = platforms.for_state(workflow.load(directory))
+    content = directory / profile['rendered_artifact']
+    cover = directory / profile['cover']['output']
     for path in (content, cover):
         if not path.is_file():
             raise ValueError(f'发布所需文件不存在：{path}')
@@ -131,7 +145,7 @@ def publish_article(args: argparse.Namespace) -> int:
         arguments.extend(['--author', author])
     if digest:
         arguments.extend(['--digest', digest])
-    return run_skill('wechat-draft-publisher', 'publisher.py', *arguments)
+    return run_skill(profile['publisher'], profile['publisher_entry'], *arguments)
 
 
 def image_article(args: argparse.Namespace) -> int:
@@ -166,6 +180,14 @@ def workflow_command(args: argparse.Namespace) -> int:
     perspective = preferences.task_perspective(state)
     print(f'任务平台：{preferences.PLATFORM_LABELS.get(platform, platform)}；写作视角：{preferences.PERSPECTIVE_LABELS.get(perspective, perspective)}')
     print(f'标题与大纲检查点：{"开启" if workflow.outline_required(state) else "已授权跳过"}')
+    profile = platforms.for_state(state)
+    if profile['implemented']:
+        try:
+            print(f'本阶段写作 Skill：{platforms.writer_skill(state)}')
+        except ValueError as exc:
+            print(f'写作 Skill：{exc}')
+    else:
+        print(f'写作 Skill：{profile["label"]}适配器尚未实现')
     if platform == 'rednote':
         print('小红书任务选择已保存；对应创作与发布适配尚未实现。')
     stale = workflow.stale_step(directory, state)
@@ -233,6 +255,9 @@ def doctor(args: argparse.Namespace) -> int:
     for label, passed in checks:
         print(f'{"OK" if passed else "MISSING"}  {label}')
     print('仅检查本地环境；未连接 ComfyUI 或微信，也未读取微信凭证。')
+    planned = [profile['label'] for profile in platforms.REGISTRY.values() if not profile['implemented']]
+    if planned:
+        print(f'平台适配器尚未实现：{"、".join(planned)}（可选择并记录，不能推进创作流程）。')
     if not (ROOT / preferences.ENV_NAME).exists():
         print(f'提示：上传草稿前运行 python3 openwrite.py setup 生成 {preferences.ENV_NAME} 并填写微信凭证。')
     if not all(passed for _, passed in checks):
@@ -247,9 +272,9 @@ def main(argv: list[str] | None = None) -> int:
     new = commands.add_parser('new', help='创建一篇文章的工作区，不生成正文和图片')
     new.add_argument('name', help='文章目录名，位于项目 articles/ 下')
     new.add_argument('--title', help='文章初始标题')
-    new.add_argument('--platform', choices=['wechat', 'rednote'], default=None)
+    new.add_argument('--platform', choices=tuple(platforms.REGISTRY), default=None)
     views = new.add_mutually_exclusive_group()
-    views.add_argument('--perspective', choices=['blogger', 'tech', 'product'], default=None)
+    views.add_argument('--perspective', choices=tuple(preferences.PERSPECTIVE_LABELS), default=None)
     views.add_argument('--type', choices=['tech', 'product'], default=None, help='旧版视角参数，兼容 --perspective')
     new.add_argument('--skip-outline', action='store_true', help='用户授权跳过标题与大纲确认检查点')
     new.set_defaults(action=new_article)
@@ -261,9 +286,9 @@ def main(argv: list[str] | None = None) -> int:
         command.set_defaults(action=workflow_command)
         if operation == 'init':
             command.add_argument('--title')
-            command.add_argument('--platform', choices=['wechat', 'rednote'], default=None)
+            command.add_argument('--platform', choices=tuple(platforms.REGISTRY), default=None)
             views = command.add_mutually_exclusive_group()
-            views.add_argument('--perspective', choices=['blogger', 'tech', 'product'], default=None)
+            views.add_argument('--perspective', choices=tuple(preferences.PERSPECTIVE_LABELS), default=None)
             views.add_argument('--type', choices=['tech', 'product'], default=None)
             command.add_argument('--skip-outline', action='store_true', help='用户授权跳过标题与大纲确认检查点')
         elif operation == 'complete':
@@ -275,12 +300,12 @@ def main(argv: list[str] | None = None) -> int:
     setup = commands.add_parser('setup', help='复制 .env.example 为本地 .env，用于填写微信凭证与流程配置')
     setup.set_defaults(action=setup_command)
     defaults = commands.add_parser('preferences', help='解析本次平台和视角，不创建任务')
-    defaults.add_argument('--platform', choices=['wechat', 'rednote'], default=None)
-    defaults.add_argument('--perspective', choices=['blogger', 'tech', 'product'], default=None)
+    defaults.add_argument('--platform', choices=tuple(platforms.REGISTRY), default=None)
+    defaults.add_argument('--perspective', choices=tuple(preferences.PERSPECTIVE_LABELS), default=None)
     defaults.set_defaults(action=preference_command)
     check = commands.add_parser('doctor', help='检查本地依赖、Skill 及模板，不联网')
     check.set_defaults(action=doctor)
-    formatting = commands.add_parser('format', help='第七步：排版并保存可发布产物（article.html + publish-manifest.json）')
+    formatting = commands.add_parser('format', help='第七步：排版并保存可发布产物（渲染结果 + publish-manifest.json）')
     formatting.add_argument('article', help='文章目录路径，相对于当前工作目录')
     formatting.add_argument('--theme', default='default')
     formatting.add_argument('--no-preformat', action='store_true', help='保留原文引号与间距')

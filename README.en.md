@@ -29,6 +29,7 @@ OpenWrite/
 ├── openwrite.py
 ├── workflow.py
 ├── preferences.py
+├── platforms.py          # platform adapter registry
 ├── .env.example        # tracked placeholder template
 ├── .env                # local real config, created by setup, Git-ignored
 ├── requirements.txt
@@ -127,3 +128,5 @@ Runtime configuration is read only from the local `.env`; `.env.example` is a sa
 Explicit user choices, passed by the agent as `--platform wechat|rednote` and `--perspective blogger|tech|product`, override the unique enabled default in each group. If no single option is enabled and the user has not specified one, the command refuses to create a task and asks for an explicit choice. The two groups resolve independently.
 
 Run `python3 openwrite.py preferences` to inspect the resolved defaults. Task choices are persisted in `workflow.json`; changing the defaults does not change existing work. Rednote choices can be saved, but its creation and publishing adapters are not implemented and cannot use the WeChat pipeline. See [selection rules](docs/task-selection.md).
+
+Platform differences live in the `platforms.py` registry (artifact shape, dimensions, image counts, limits, renderer and publisher skills); the controller and command entry only read that table. Rednote specs are verified and registered while its adapters remain unimplemented. See the [platform adapter contract](docs/platforms.md) for the onboarding checklist and phased roadmap.

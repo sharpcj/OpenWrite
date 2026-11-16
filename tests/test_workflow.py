@@ -183,7 +183,7 @@ class WorkflowTests(unittest.TestCase):
         import shutil
         project = self.article / 'project'
         project.mkdir()
-        for name in ('openwrite.py', 'workflow.py', 'preferences.py'):
+        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py'):
             shutil.copy2(ROOT / name, project / name)
         shutil.copytree(ROOT / 'skills', project / 'skills')
 

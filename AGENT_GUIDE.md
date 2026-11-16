@@ -12,6 +12,8 @@ OpenWrite 是项目级创作工程，统一入口为 [AGENTS.md](AGENTS.md)。�
 
 新任务使用配置中的唯一默认项：运行时只读取本地 `.env`，[.env.example](.env.example) 只是供 `setup` 复制的打样模板，不参与解析。用户提示词明确指定时以其选择优先。Agent 仅把明确选择传为 `--platform` / `--perspective`；配置歧义通过命令返回“需要确认”，必须向用户取得明确选择。详见 [任务选择规则](docs/task-selection.md)。继续任务以已有状态为准，不重选。
 
+平台产物规格与适配器接线登记在 `platforms.py` 注册表，控制器与命令入口只查表。微信已实现；小红书规格已核实但适配器未实现（`implemented: false`），门禁会在推进前拒绝。写作 Skill 由 `platforms.writer_skill(state)` 按平台与视角解析，不要凭主题词自行切换。接入清单见 [平台适配器契约](docs/platforms.md)。
+
 ## 能力要求
 
 | 工作 | 所需能力 | 缺少能力时 |
@@ -84,6 +86,8 @@ python3 openwrite.py publish articles/my-topic --title "文章标题"
 Open the repository in your agent and read [AGENTS.md](AGENTS.md). The skills live in `skills/` and article workspaces in `articles/`; global skill installation is unnecessary. `CLAUDE.md` and `GEMINI.md` redirect to the same project instructions. If the host does not load project instructions automatically, explicitly ask it to read `AGENTS.md`.
 
 Writing skills submit backend-neutral requests to `image-requests.json`. The independent `openwrite-images` capability owns acquisition, backend configuration, decoding, dimension checks, and `image-results.json`. Image readiness still requires visual review.
+
+Platform differences are data in the `platforms.py` registry (artifact shape, dimensions, image counts, limits, renderer and publisher skills); the controller and command entry only read that table, and `workflow status` names the writing skill for the saved platform and perspective. WeChat is implemented. Rednote specs are verified and registered but its adapters are not (`implemented: false`), so every gate refuses to advance while the saved choice is preserved. See the [platform adapter contract](docs/platforms.md) for the onboarding checklist and phased roadmap.
 
 Map the documented capabilities to the host's actual tools. Report missing capabilities and provide text, prompts, or commands instead of claiming unexecuted work. Continue an article by reading its `brief.md` and existing artifacts.
 

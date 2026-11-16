@@ -35,6 +35,7 @@ OpenWrite/
 ├── openwrite.py                    # 项目命令入口
 ├── workflow.py                     # 七步状态与产物检查
 ├── preferences.py                  # 平台与视角默认值解析
+├── platforms.py                    # 平台适配器注册表（产物规格与 Skill 接线）
 ├── .env.example                    # 配置占位模板：平台、视角、微信凭证
 ├── .env                            # 本地真实配置，由 setup 生成，Git 忽略
 ├── requirements.txt
@@ -74,6 +75,8 @@ python3 openwrite.py new product-topic --title "产品主题" --perspective prod
 ```
 
 选择写入任务状态，继续任务不受后来默认配置修改影响。小红书可选择并记录，但对应创作和发布适配尚未实现，不能调用微信流程继续。详见 [平台与视角选择](docs/task-selection.md)。
+
+平台差异统一登记在 `platforms.py` 注册表（产物形态、尺寸、张数、上限、渲染与发布 Skill），流程控制器与命令入口只查表。小红书规格已核实登记但适配器未实现；接入清单与分阶段路线见 [平台适配器契约](docs/platforms.md)。
 
 ## 环境准备
 

@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import tempfile
 
+import platforms
 import preferences
 from urllib.parse import urlparse
 
@@ -18,11 +19,7 @@ SUBMITTABLE = STEPS[:-2]
 AGGRESSIVE_STYLE = '激进悬念'
 NEUTRAL_STYLE = '客观中性'
 BENEFIT_STYLE = '利益实用'
-MAX_TITLE_CHARS = 64
-MAX_TITLE_BYTES = 192
-MAX_AUTHOR_BYTES = 20
-MAX_DIGEST_BYTES = 120
-MAX_COVER_BYTES = 2 * 1024 * 1024
+# Product limits and artifact names live in platforms.REGISTRY, not here.
 
 
 def outline_required(state: dict) -> bool:
@@ -62,7 +59,7 @@ def read_json(path: Path) -> dict:
 
 
 def initialize(article: Path, title: str = '', perspective: str = 'tech',
-               platform: str = 'wechat', selection_source=None,
+               platform: str = platforms.WECHAT, selection_source=None,
                outline_approval: bool = True) -> dict:
     path = article / 'workflow.json'
     if path.exists():
@@ -190,9 +187,16 @@ def requests(article: Path) -> list:
     # Validate the whole manifest once, including duplicate output names and identifiers.
     first = images[0].get('id') if isinstance(images[0], dict) else ''
     runtime.load_request(article, first)
+    profile = platforms.for_state(load(article))
     covers = [item for item in images if item['role'] == 'cover']
-    if len(covers) != 1 or covers[0]['id'] != 'cover':
-        raise ValueError('需求清单必须有且仅有一项 id 为 cover 的封面')
+    if len(covers) != 1 or covers[0]['id'] != profile['cover']['id']:
+        raise ValueError(f'需求清单必须有且仅有一项 id 为 {profile["cover"]["id"]} 的封面')
+    rule = profile['content_images']
+    content = [item for item in images if item['role'] == 'content']
+    if rule['required'] and len(content) < rule['min']:
+        raise ValueError(f'{profile["label"]}图文至少需要 {rule["min"]} 张正文卡片')
+    if rule['max'] is not None and len(content) > rule['max']:
+        raise ValueError(f'{profile["label"]}正文卡片最多 {rule["max"]} 张')
     return images
 
 
@@ -286,9 +290,10 @@ def proof(article: Path, step: str) -> str:
         final_text(article)
         return digest({'decision': decision, 'images': images_proof})
     if step == 'markdown':
-        if (article / 'article.md').read_text(encoding='utf-8') != final_text(article):
-            raise ValueError('article.md 与当前正文/配图不一致，请重新 finalize')
-        return file_hash(article / 'article.md')
+        name = platforms.for_state(load(article))['markdown_artifact']
+        if (article / name).read_text(encoding='utf-8') != final_text(article):
+            raise ValueError(f'{name} 与当前正文/配图不一致，请重新 finalize')
+        return file_hash(article / name)
     if step == 'format':
         manifest = read_json(article / 'publish-manifest.json')
         if manifest.get('version') != 1 or not isinstance(manifest.get('files'), dict):
@@ -300,11 +305,14 @@ def proof(article: Path, step: str) -> str:
 
 def publishable_files(article: Path) -> dict:
     """Fingerprints of every artifact a draft upload depends on."""
-    names = ['article.md', 'article.html', 'cover.png']
+    profile = platforms.for_state(load(article))
+    names = list(profile['artifacts'])
+    # The cover is always part of the upload, whether it is a standalone image
+    # (WeChat) or the first card of a set (Rednote).
+    names.append(profile['cover']['output'])
     names.extend(item['output'] for item in requests(article) if item['role'] == 'content')
-    if (article / 'closing.md').exists():
-        names.append('closing.md')
-    return {name: file_hash(article / name) for name in names}
+    names.extend(name for name in profile['optional_artifacts'] if (article / name).exists())
+    return {name: file_hash(article / name) for name in dict.fromkeys(names)}
 
 
 def stale_step(article: Path, state: dict):
@@ -319,8 +327,7 @@ def stale_step(article: Path, state: dict):
 
 def checked(article: Path) -> dict:
     state = load(article)
-    if preferences.task_platform(state) != 'wechat':
-        raise ValueError('已保存小红书平台选择，但小红书创作与发布适配尚未实现；不能使用微信七步流程继续')
+    platforms.require_pipeline(state)
     stale = stale_step(article, state)
     if stale:
         raise ValueError(f'步骤 {stale[0]} 已失效：{stale[1]}；请 workflow reset <目录> --from {stale[0]} 后重做')
@@ -358,9 +365,10 @@ def finalize(article: Path) -> dict:
         raise ValueError('需按顺序完成前五步，才能生成最终 Markdown')
     # 第六步之后的排版由 openwrite.py format 完成。
     text = final_text(article)
-    output = article / 'article.md'
+    name = platforms.for_state(state)['markdown_artifact']
+    output = article / name
     if output.is_symlink():
-        raise ValueError('article.md 不能是符号链接')
+        raise ValueError(f'{name} 不能是符号链接')
     output.write_text(text, encoding='utf-8')
     state['completed'].append({'step': 'markdown', 'proof': proof(article, 'markdown'), 'note': ''})
     state['revision'] += 1
@@ -407,36 +415,41 @@ def require_format_stage(article: Path) -> dict:
 
 
 def publish_metadata(article: Path, state: dict) -> dict:
+    profile = platforms.for_state(state)
     root = Path(__file__).resolve().parent
-    return {'title': state['title'], 'author': preferences.wechat_credentials(root)['author'], 'digest': ''}
+    author = preferences.credential_value(root, profile['author_key'])
+    return {'title': state['title'], 'author': author, 'digest': ''}
 
 
 def check_publishable(article: Path, state: dict, html_path: Path) -> dict:
     """Pre-upload checks so the writing stage delivers a genuinely publishable artifact."""
     from PIL import Image
+    profile = platforms.for_state(state)
+    limits = profile['limits']
     metadata = publish_metadata(article, state)
     title, author, digest = metadata['title'], metadata['author'], metadata['digest']
     problems = []
     if not title or not title.strip():
         problems.append('标题不能为空')
     else:
-        if len(title) > MAX_TITLE_CHARS:
-            problems.append(f'标题超过 {MAX_TITLE_CHARS} 字符（当前 {len(title)}）')
-        if len(title.encode('utf-8')) > MAX_TITLE_BYTES:
-            problems.append(f'标题超过 {MAX_TITLE_BYTES} 字节')
-    if author and len(author.encode('utf-8')) > MAX_AUTHOR_BYTES:
-        problems.append(f'作者名超过 {MAX_AUTHOR_BYTES} 字节')
-    if digest and len(digest.encode('utf-8')) > MAX_DIGEST_BYTES:
-        problems.append(f'摘要超过 {MAX_DIGEST_BYTES} 字节')
+        if limits['title_chars'] and len(title) > limits['title_chars']:
+            problems.append(f'标题超过 {limits["title_chars"]} 字符（当前 {len(title)}）')
+        if limits['title_bytes'] and len(title.encode('utf-8')) > limits['title_bytes']:
+            problems.append(f'标题超过 {limits["title_bytes"]} 字节')
+    if author and limits['author_bytes'] and len(author.encode('utf-8')) > limits['author_bytes']:
+        problems.append(f'作者名超过 {limits["author_bytes"]} 字节')
+    if digest and limits['digest_bytes'] and len(digest.encode('utf-8')) > limits['digest_bytes']:
+        problems.append(f'摘要超过 {limits["digest_bytes"]} 字节')
 
-    cover = article / 'cover.png'
+    cover_name = profile['cover']['output']
+    cover = article / cover_name
     cover_bytes = 0
     if not cover.is_file():
-        problems.append('缺少封面 cover.png')
+        problems.append(f'缺少封面 {cover_name}')
     else:
         cover_bytes = cover.stat().st_size
-        if cover_bytes > MAX_COVER_BYTES:
-            problems.append('封面超过 2MB，微信素材接口会拒绝')
+        if limits['cover_bytes'] and cover_bytes > limits['cover_bytes']:
+            problems.append(f'封面超过 {limits["cover_bytes"] // (1024 * 1024)}MB，{profile["label"]}素材接口会拒绝')
         try:
             with Image.open(cover) as picture:
                 picture.load()
@@ -448,15 +461,16 @@ def check_publishable(article: Path, state: dict, html_path: Path) -> dict:
     html = html_path.read_text(encoding='utf-8') if html_path.is_file() else ''
     if not html.strip():
         problems.append('排版结果为空')
-    if '<pre' in html.lower():
+    if profile['checks']['code_blocks_converted'] and '<pre' in html.lower():
         problems.append('代码块尚未转换为微信兼容格式')
     local_images = 0
-    for src in re.findall(r'<img[^>]*src=["\']([^"\']+)["\']', html):
-        if src.startswith(('http://', 'https://', 'data:')):
-            continue
-        local_images += 1
-        if not (article / src).is_file():
-            problems.append(f'正文图片不存在：{src}')
+    if profile['checks']['local_images_exist']:
+        for src in re.findall(r'<img[^>]*src=["\']([^"\']+)["\']', html):
+            if src.startswith(('http://', 'https://', 'data:')):
+                continue
+            local_images += 1
+            if not (article / src).is_file():
+                problems.append(f'正文图片不存在：{src}')
     if problems:
         raise ValueError('产物尚不可发布：\n  - ' + '\n  - '.join(problems))
     return {'title_chars': len(title), 'cover_bytes': cover_bytes,
@@ -464,9 +478,10 @@ def check_publishable(article: Path, state: dict, html_path: Path) -> dict:
 
 
 def build_manifest(article: Path, state: dict, theme: str, preformat: bool, checks: dict) -> dict:
+    profile = platforms.for_state(state)
     return {'version': 1, 'platform': preferences.task_platform(state),
             **publish_metadata(article, state),
-            'theme': theme, 'preformat': bool(preformat), 'cover': 'cover.png',
+            'theme': theme, 'preformat': bool(preformat), 'cover': profile['cover']['output'],
             'content_images': [item['output'] for item in requests(article) if item['role'] == 'content'],
             'files': publishable_files(article), 'checks': checks}
 
@@ -474,8 +489,7 @@ def build_manifest(article: Path, state: dict, theme: str, preformat: bool, chec
 def complete_format(article: Path, theme: str, preformat: bool, checks: dict) -> dict:
     """Record the seventh stage; replaces the previous record when re-formatting."""
     state = load(article)
-    if preferences.task_platform(state) != 'wechat':
-        raise ValueError('小红书创作与发布适配尚未实现，不能使用微信七步流程继续')
+    platforms.require_pipeline(state)
     records = state['completed']
     redo = bool(records) and records[-1]['step'] == 'format'
     upstream = records[:-1] if redo else records
