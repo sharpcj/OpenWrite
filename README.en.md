@@ -126,9 +126,9 @@ Use `workflow status <article>` to resume in another session. Use `workflow rese
 
 ## Platform and perspective defaults
 
-Runtime configuration is read only from the local `.env`; `.env.example` is a sample template used solely by `setup` and never participates in resolution. Without `.env` there are no defaults and the command asks for an explicit choice. The template samples WeChat and the self-media blogger perspective. Platform keys are `WeChat` and `Rednote`; perspective keys are `SelfMediaBlogger`, `TechWriter`, and `ProductManager`.
+Runtime configuration is read only from the local `.env`; `.env.example` is a sample template used solely by `setup` and never participates in resolution. Without `.env` the platform has no default and the command asks for an explicit choice; the writer role still defaults to the self-media blogger. The template samples WeChat and `WriterRole=SelfMediaBlogger`. Platform keys are the booleans `WeChat` and `Rednote`; the perspective is the single-valued `WriterRole` (`SelfMediaBlogger`, `TechWriter`, or `ProductManager`). Legacy boolean perspective keys are rejected with a migration hint.
 
-Explicit user choices, passed by the agent as `--platform wechat|rednote` and `--perspective blogger|tech|product`, override the unique enabled default in each group. If no single option is enabled and the user has not specified one, the command refuses to create a task and asks for an explicit choice. The two groups resolve independently.
+Explicit user choices, passed by the agent as `--platform wechat|rednote` and `--perspective blogger|tech|product`, win over configuration. For the platform, if no single option is enabled and the user has not specified one, the command refuses to create a task and asks for an explicit choice. The writer role falls back to `SelfMediaBlogger` when `WriterRole` is absent or empty, so it never needs confirmation. The two dimensions resolve independently.
 
 Run `python3 openwrite.py preferences` to inspect the resolved defaults. Task choices are persisted in `workflow.json`; changing the defaults does not change existing work. Rednote has P0 implemented (writing and card artifacts); its upload adapter is not implemented, so publishing is manual. See [selection rules](docs/task-selection.md).
 

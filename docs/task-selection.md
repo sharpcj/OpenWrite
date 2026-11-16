@@ -6,23 +6,29 @@
 WeChat=true
 Rednote=false
 
-SelfMediaBlogger=true
-TechWriter=false
-ProductManager=false
+WriterRole=SelfMediaBlogger
 ```
 
 平台：`WeChat` → `wechat`，`Rednote` → `rednote`。
-视角：`SelfMediaBlogger` → `blogger`（自媒体博主），`TechWriter` → `tech`（技术作者），`ProductManager` → `product`（产品经理）。
+视角：`WriterRole` 单选，`SelfMediaBlogger` → `blogger`（自媒体博主），`TechWriter` → `tech`（技术作者），`ProductManager` → `product`（产品经理）；缺省或留空默认 `SelfMediaBlogger`。
 
 ## 新任务优先级
 
 平台与视角分别处理：
 
+**平台**（布尔开关组）：
+
 1. 当前用户提示词明确指定的选择优先。
 2. 未明确指定时，使用配置组中唯一为 `true` 的项。
 3. 同组没有启用项或同时启用多个项，且提示词没有明确指定时，必须向用户确认。
 
-省略的配置项按关闭处理；文件不存在时，两组都没有默认项。值仅允许 `true` / `false`（大小写不敏感，可以加引号和行尾注释）。重复已知键或非法布尔值会报错，不能静默猜测。
+**写作视角**（单值 `WriterRole`）：
+
+1. 当前用户提示词明确指定的选择优先。
+2. 未明确指定时，使用 `WriterRole` 的值（大小写不敏感，可以加引号和行尾注释）。
+3. 缺省或留空时默认 `SelfMediaBlogger`，无需确认；取值非法时报错。
+
+平台开关省略按关闭处理；文件不存在时平台没有默认项，视角仍默认博主。平台值仅允许 `true` / `false`（大小写不敏感）。重复已知键、非法布尔值或非法 `WriterRole` 取值会报错，不能静默猜测。旧版视角布尔开关（`SelfMediaBlogger` / `TechWriter` / `ProductManager` 作为键）已废弃，出现时报错并提示改用 `WriterRole`。
 
 Agent 负责理解用户提示词的明确意图，转换为命令参数。不会仅凭主题中出现“产品”“技术”“小红书”就猜测平台或视角：例如“分析小红书产品的公众号文章”并不代表发布到小红书。
 
@@ -42,11 +48,11 @@ python3 openwrite.py new chosen-note --platform wechat --perspective tech
 
 `new` 和 `workflow init` 共用同一选择逻辑。`--type tech/product` 保留为旧版视角参数，与 `--perspective` 不能同时使用。
 
-当选择不明确时，命令以非零状态退出，指出需要确认的平台或视角，不创建文章目录。Agent 应向用户提出简短明确的问题，收到选择后再传参重试；报错或等待超时都不视为用户已确认。已有唯一默认值的另一组不必重复询问。
+当平台选择不明确时，命令以非零状态退出，指出需要确认的平台，不创建文章目录。Agent 应向用户提出简短明确的问题，收到选择后再传参重试；报错或等待超时都不视为用户已确认。写作视角有内置默认值，不需要询问。
 
 ## 任务内持久化
 
-选择确定后写入 `workflow.json` 的 `platform`、`perspective` 和 `selection_source`。`selection_source` 分别记录选择来自 `config` 还是 `explicit`（用户明确选择或用户提示词经 Agent 转换的参数）。`brief.md` 同时显示平台和视角。
+选择确定后写入 `workflow.json` 的 `platform`、`perspective` 和 `selection_source`。`selection_source` 分别记录选择来自 `explicit`（用户明确选择或用户提示词经 Agent 转换的参数）、`config`（配置值）还是 `default`（视角缺省时的内置默认）。`brief.md` 同时显示平台和视角。
 
 继续同一任务使用这些已保存的选择，不再读取当前默认配置来覆盖任务；`workflow status` 会显示平台和视角。修改 `.env` 只影响后续新任务，不回写或改变已有任务；修改 `.env.example` 模板不影响任何运行行为。若要制作不同平台或视角的版本，应新建对应任务。
 

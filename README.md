@@ -64,9 +64,9 @@ OpenWrite/
 
 ## 默认平台与写作视角
 
-运行时**只读取本地 `.env`**；[.env.example](.env.example) 只是打样模板，不参与解析。运行 `python3 openwrite.py setup` 会把模板复制为 `.env`（不覆盖已有文件，权限 600，已被 Git 忽略），随后所有平台、视角与凭证的修改都在 `.env` 中进行。模板给出的样例是 `WeChat=true`、`SelfMediaBlogger=true`，其他项关闭。没有 `.env` 时没有默认项，命令会要求用户明确选择。
+运行时**只读取本地 `.env`**；[.env.example](.env.example) 只是打样模板，不参与解析。运行 `python3 openwrite.py setup` 会把模板复制为 `.env`（不覆盖已有文件，权限 600，已被 Git 忽略），随后所有平台、视角与凭证的修改都在 `.env` 中进行。模板给出的样例是 `WeChat=true`、`WriterRole=SelfMediaBlogger`。没有 `.env` 时平台没有默认项，命令会要求用户明确选择；写作视角默认自媒体博主。
 
-**本次提示词明确指定 > 配置中唯一启用项 > 用户明确确认**。平台与视角分别判断；同组全部关闭或同时启用多个时，未指定的维度需要确认。
+**平台：本次提示词明确指定 > 配置中唯一启用项 > 用户明确确认**；同组全部关闭或同时启用多个时，未指定则需要确认。**写作视角：本次提示词明确指定 > `WriterRole` > 默认 `SelfMediaBlogger`**；单值选择（`SelfMediaBlogger` / `TechWriter` / `ProductManager`），无需确认，旧版布尔开关已废弃。
 
 ```bash
 python3 openwrite.py preferences

@@ -14,7 +14,7 @@ from unittest.mock import patch
 import preferences
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ('WeChat=true\nSelfMediaBlogger=true\n'
+TEMPLATE = ('WeChat=true\nWriterRole=SelfMediaBlogger\n'
             'WeChatAppID=\nWeChatAppSecret=\nWeChatAuthor=\n')
 APPID = 'wx1234567890abcdef'
 
@@ -72,14 +72,14 @@ class EnvSetupTests(unittest.TestCase):
 
     def test_template_never_participates_in_runtime_resolution(self):
         (self.project / '.env.example').write_text(
-            'WeChat=false\nRednote=true\nSelfMediaBlogger=false\nProductManager=true\n'
+            'WeChat=false\nRednote=true\nWriterRole=ProductManager\n'
             f'WeChatAppID={APPID}\nWeChatAppSecret=from-template\n', encoding='utf-8')
         # 只有模板时没有可用配置，必须向用户确认，而不是套用模板值。
         with self.assertRaises(preferences.ChoiceRequired):
             preferences.resolve(self.project)
         with self.assertRaises(ValueError):
             preferences.require_wechat_credentials(self.project)
-        (self.project / '.env').write_text('WeChat=true\nSelfMediaBlogger=true\n', encoding='utf-8')
+        (self.project / '.env').write_text('WeChat=true\nWriterRole=SelfMediaBlogger\n', encoding='utf-8')
         selection = preferences.resolve(self.project)
         self.assertEqual((selection['platform'], selection['perspective']), ('wechat', 'blogger'))
         self.assertEqual(preferences.read_values(self.project).get('WeChatAppID'), None)

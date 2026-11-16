@@ -133,16 +133,16 @@ class OutlineConfigTests(unittest.TestCase):
         return result
 
     def test_flag_defaults_to_true_and_rejects_invalid_values(self):
-        self.write_env('WeChat=true\nSelfMediaBlogger=true\n')
+        self.write_env('WeChat=true\nWriterRole=SelfMediaBlogger\n')
         self.assertTrue(preferences.outline_approval(self.project))
-        self.write_env('WeChat=true\nSelfMediaBlogger=true\nOutlineApproval=false\n')
+        self.write_env('WeChat=true\nWriterRole=SelfMediaBlogger\nOutlineApproval=false\n')
         self.assertFalse(preferences.outline_approval(self.project))
         self.write_env('OutlineApproval=maybe\n')
         with self.assertRaises(ValueError):
             preferences.outline_approval(self.project)
 
     def test_config_opt_out_is_persisted_and_lets_draft_skip_outline(self):
-        self.write_env('WeChat=true\nSelfMediaBlogger=true\nOutlineApproval=false\n')
+        self.write_env('WeChat=true\nWriterRole=SelfMediaBlogger\nOutlineApproval=false\n')
         self.run_cli('new', 'auto', '--title', '自动写作')
         article = self.project / 'articles/auto'
         state = json.loads((article / 'workflow.json').read_text())
@@ -158,12 +158,12 @@ class OutlineConfigTests(unittest.TestCase):
         self.run_cli('workflow', 'complete', str(article), '--step', 'draft')
         self.assertFalse((article / 'outline.json').exists())
         # Changing the config later must not alter the saved task choice.
-        self.write_env('WeChat=true\nSelfMediaBlogger=true\nOutlineApproval=true\n')
+        self.write_env('WeChat=true\nWriterRole=SelfMediaBlogger\nOutlineApproval=true\n')
         status = self.run_cli('workflow', 'status', str(article))
         self.assertIn('标题与大纲检查点：已授权跳过', status.stdout)
 
     def test_explicit_skip_flag_overrides_enabled_config(self):
-        self.write_env('WeChat=true\nSelfMediaBlogger=true\nOutlineApproval=true\n')
+        self.write_env('WeChat=true\nWriterRole=SelfMediaBlogger\nOutlineApproval=true\n')
         self.run_cli('new', 'manual', '--title', '手动确认')
         self.assertTrue(json.loads((self.project / 'articles/manual/workflow.json').read_text())['outline_approval'])
         self.run_cli('new', 'skipped', '--title', '跳过确认', '--skip-outline')

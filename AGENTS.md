@@ -4,7 +4,7 @@ OpenWrite 是一个微信公众号创作工作区。用户在项目中提出写�
 
 ## 平台与写作视角
 
-新任务先按 [选择规则](docs/task-selection.md) 解析平台与视角。运行时只读取本地 `.env`（由 `setup` 从 `.env.example` 模板复制生成，模板本身不参与解析）；提示词明确指定优先，其次采用同组唯一启用项。同组全部关闭或多项启用且用户未指定时，必须先向用户确认，不自行猜测。
+新任务先按 [选择规则](docs/task-selection.md) 解析平台与视角。运行时只读取本地 `.env`（由 `setup` 从 `.env.example` 模板复制生成，模板本身不参与解析）；提示词明确指定优先。平台其次采用同组唯一启用项，全部关闭或多项启用且用户未指定时，必须先向用户确认，不自行猜测；写作视角读取单值 `WriterRole`，缺省默认 `SelfMediaBlogger`（自媒体博主），无需确认。
 
 用户提示词中的明确选择由 Agent 转为 `new` / `workflow init` 的 `--platform wechat|rednote` 和 `--perspective blogger|tech|product`；未指定的维度不要擅自传参，以免覆盖默认配置。话题词不等于选择意图，例如分析某平台不等于发布到该平台。
 

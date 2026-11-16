@@ -196,7 +196,7 @@ class WorkflowTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
             return result
 
-        (project / '.env').write_text('WeChat=true\nSelfMediaBlogger=true\n')
+        (project / '.env').write_text('WeChat=true\nWriterRole=SelfMediaBlogger\n')
         run('new', 'cli-article', '--title', '命令行测试')
         article = project / 'articles/cli-article'
         location = str(article)

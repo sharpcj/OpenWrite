@@ -24,7 +24,10 @@ ENV_NAME = '.env'
 FEATURES = {'OutlineApproval': True}
 # WeChat publishing credentials; real values belong in .env, never in the template.
 CREDENTIALS = {'WeChatAppID': 'appid', 'WeChatAppSecret': 'appsecret', 'WeChatAuthor': 'author'}
-KNOWN_KEYS = set(PLATFORMS) | set(PERSPECTIVES) | set(CREDENTIALS)
+# Single-valued writer role; the legacy boolean perspective switches are rejected.
+WRITER_ROLE_KEY = 'WriterRole'
+DEFAULT_WRITER_ROLE = 'SelfMediaBlogger'
+KNOWN_KEYS = set(PLATFORMS) | {WRITER_ROLE_KEY} | set(CREDENTIALS)
 PLACEHOLDERS = {'', 'your_appid', 'your_appid_here', 'your_appsecret', 'your_appsecret_here',
                 'your_author', 'your_author_here', 'changeme'}
 
@@ -66,14 +69,35 @@ def read_values(root: Path) -> dict:
 
 
 def read_config(root: Path) -> dict:
+    """Boolean platform flags; the writer role is single-valued via WriterRole."""
     flags = {}
     for key, value in read_values(root).items():
-        if key not in PLATFORMS and key not in PERSPECTIVES:
+        if key not in PLATFORMS:
             continue
         if value.lower() not in ('true', 'false'):
             raise ValueError(f'{ENV_NAME} 中的 {key} 只能为 true 或 false')
         flags[key] = value.lower() == 'true'
     return flags
+
+
+def writer_role(root: Path) -> tuple:
+    """Resolve WriterRole into (perspective, selection_source).
+
+    Absent or empty falls back to the blogger default. Legacy boolean
+    perspective switches are rejected instead of silently ignored.
+    """
+    values = read_values(root)
+    legacy = [key for key in PERSPECTIVES if key in values]
+    if legacy:
+        raise ValueError(f'{ENV_NAME} 中的旧版视角开关 {"、".join(legacy)} 已废弃；'
+                         f'请改用 {WRITER_ROLE_KEY}（{" / ".join(PERSPECTIVES)}，默认 {DEFAULT_WRITER_ROLE}）')
+    raw = values.get(WRITER_ROLE_KEY, '').strip()
+    if not raw:
+        return PERSPECTIVES[DEFAULT_WRITER_ROLE], 'default'
+    for label, perspective in PERSPECTIVES.items():
+        if raw.casefold() == label.casefold():
+            return perspective, 'config'
+    raise ValueError(f'{ENV_NAME} 中的 {WRITER_ROLE_KEY} 只能为 {" / ".join(PERSPECTIVES)}（当前：{raw}）')
 
 
 def feature_flags(root: Path) -> dict:
@@ -103,21 +127,22 @@ def resolve(root: Path, platform=None, perspective=None) -> dict:
             raise ValueError(f'未知{label}：{supplied}')
     flags = read_config(root)
     result, selection_source, missing = {}, {}, []
-    for name, label, options, explicit, argument in (
-        ('platform', '平台', PLATFORMS, platform, '--platform'),
-        ('perspective', '写作视角', PERSPECTIVES, perspective, '--perspective'),
-    ):
-        if explicit is not None:
-            result[name] = explicit
-            selection_source[name] = 'explicit'
-            continue
-        enabled = [value for key, value in options.items() if flags.get(key, False)]
+    if platform is not None:
+        result['platform'] = platform
+        selection_source['platform'] = 'explicit'
+    else:
+        enabled = [value for key, value in PLATFORMS.items() if flags.get(key, False)]
         if len(enabled) == 1:
-            result[name] = enabled[0]
-            selection_source[name] = 'config'
+            result['platform'] = enabled[0]
+            selection_source['platform'] = 'config'
         else:
             reason = '没有唯一启用项' if not enabled else '同时启用了多个选项'
-            missing.append(f'{label}{reason}，请向用户明确确认后传入 {argument} ({" / ".join(options.values())})')
+            missing.append(f'平台{reason}，请向用户明确确认后传入 --platform ({" / ".join(PLATFORMS.values())})')
+    if perspective is not None:
+        result['perspective'] = perspective
+        selection_source['perspective'] = 'explicit'
+    else:
+        result['perspective'], selection_source['perspective'] = writer_role(root)
     if missing:
         raise ChoiceRequired('；'.join(missing))
     result['selection_source'] = selection_source

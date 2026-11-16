@@ -10,7 +10,7 @@ import unittest
 import preferences
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULTS = 'WeChat=true\nRednote=false\nSelfMediaBlogger=true\nTechWriter=false\nProductManager=false\n'
+DEFAULTS = 'WeChat=true\nRednote=false\nWriterRole=SelfMediaBlogger\n'
 
 
 class PreferenceTests(unittest.TestCase):
@@ -51,55 +51,73 @@ class PreferenceTests(unittest.TestCase):
     def test_zero_or_multiple_enabled_platforms_require_confirmation(self):
         for flags in ('WeChat=false\nRednote=false', 'WeChat=true\nRednote=true', ''):
             with self.subTest(flags=flags):
-                self.flags(flags+'\nSelfMediaBlogger=true\n')
+                self.flags(flags+'\nWriterRole=SelfMediaBlogger\n')
                 with self.assertRaises(preferences.ChoiceRequired) as error:
                     preferences.resolve(self.project)
                 self.assertIn('--platform', str(error.exception))
                 self.assertEqual(preferences.resolve(self.project, platform='wechat')['platform'], 'wechat')
 
-    def test_zero_or_multiple_enabled_perspectives_require_confirmation(self):
-        for flags in ('SelfMediaBlogger=false\nTechWriter=false\nProductManager=false',
-                      'SelfMediaBlogger=true\nTechWriter=true',
-                      'TechWriter=true\nProductManager=true', ''):
-            with self.subTest(flags=flags):
-                self.flags('WeChat=true\n'+flags+'\n')
-                with self.assertRaises(preferences.ChoiceRequired) as error:
-                    preferences.resolve(self.project)
-                self.assertIn('--perspective', str(error.exception))
-                self.assertEqual(preferences.resolve(self.project, perspective='product')['perspective'], 'product')
+    def test_writer_role_single_value_and_builtin_default(self):
+        for role, expected in (('SelfMediaBlogger', 'blogger'), ('TechWriter', 'tech'),
+                               ('ProductManager', 'product'), ('techwriter', 'tech')):
+            with self.subTest(role=role):
+                self.flags(f'WeChat=true\nWriterRole={role}\n')
+                selection = preferences.resolve(self.project)
+                self.assertEqual(selection['perspective'], expected)
+                self.assertEqual(selection['selection_source']['perspective'], 'config')
+        for text in ('WeChat=true\n', 'WeChat=true\nWriterRole=\n'):
+            with self.subTest(text=text):
+                self.flags(text)
+                selection = preferences.resolve(self.project)
+                self.assertEqual(selection['perspective'], 'blogger')
+                self.assertEqual(selection['selection_source']['perspective'], 'default')
 
-    def test_both_ambiguous_groups_need_explicit_choices(self):
-        self.flags('WeChat=true\nRednote=true\nSelfMediaBlogger=true\nProductManager=true\n')
+    def test_invalid_writer_role_or_legacy_switches_are_reported(self):
+        for text in ('WeChat=true\nWriterRole=Engineer\n',
+                     'WeChat=true\nSelfMediaBlogger=true\n',
+                     'WeChat=true\nWriterRole=TechWriter\nProductManager=false\n'):
+            with self.subTest(text=text):
+                self.flags(text)
+                with self.assertRaises(ValueError) as error:
+                    preferences.resolve(self.project)
+                self.assertIn('WriterRole', str(error.exception))
+
+    def test_ambiguous_platform_needs_choice_while_role_keeps_configured(self):
+        self.flags('WeChat=true\nRednote=true\nWriterRole=ProductManager\n')
         with self.assertRaises(preferences.ChoiceRequired) as error:
             preferences.resolve(self.project)
         self.assertIn('--platform', str(error.exception))
-        self.assertIn('--perspective', str(error.exception))
-        with self.assertRaises(preferences.ChoiceRequired):
-            preferences.resolve(self.project, platform='wechat')
-        self.assertEqual(preferences.resolve(self.project, 'rednote', 'tech')['perspective'], 'tech')
+        self.assertNotIn('--perspective', str(error.exception))
+        selection = preferences.resolve(self.project, platform='rednote')
+        self.assertEqual((selection['platform'], selection['perspective']), ('rednote', 'product'))
 
-    def test_missing_config_needs_confirmation_unless_both_choices_are_explicit(self):
+    def test_missing_config_needs_platform_confirmation_but_role_defaults(self):
         self.config.unlink()
         with self.assertRaises(preferences.ChoiceRequired):
             preferences.resolve(self.project)
+        selection = preferences.resolve(self.project, platform='wechat')
+        self.assertEqual(selection['perspective'], 'blogger')
+        self.assertEqual(selection['selection_source']['perspective'], 'default')
         self.assertEqual(preferences.resolve(self.project, 'wechat', 'blogger')['platform'], 'wechat')
 
     def test_parser_handles_quotes_comments_and_never_executes_file(self):
         marker = self.project / 'must-not-exist'
-        self.flags(f'export WeChat="TRUE" # comment\nRednote=FALSE\nSelfMediaBlogger=\'true\'\n'
+        self.flags(f'export WeChat="TRUE" # comment\nRednote=FALSE\nWriterRole=\'TechWriter\'\n'
                    f'UNRELATED=$(touch {marker})\n')
-        self.assertEqual(preferences.resolve(self.project)['platform'], 'wechat')
+        selection = preferences.resolve(self.project)
+        self.assertEqual((selection['platform'], selection['perspective']), ('wechat', 'tech'))
         self.assertFalse(marker.exists())
 
     def test_invalid_boolean_or_duplicate_key_is_reported(self):
-        for flags in ('WeChat=yes\nSelfMediaBlogger=true\n',
-                      'WeChat=true\nWeChat=false\nSelfMediaBlogger=true\n'):
+        for flags in ('WeChat=yes\nWriterRole=TechWriter\n',
+                      'WeChat=true\nWeChat=false\nWriterRole=TechWriter\n',
+                      'WeChat=true\nWriterRole=TechWriter\nWriterRole=ProductManager\n'):
             self.flags(flags)
             with self.assertRaises(ValueError):
                 preferences.resolve(self.project)
 
     def test_cli_ambiguity_creates_no_task_until_user_choice_is_supplied(self):
-        self.flags('WeChat=true\nRednote=true\nSelfMediaBlogger=true\n')
+        self.flags('WeChat=true\nRednote=true\nWriterRole=SelfMediaBlogger\n')
         result = self.run_cli('new', 'topic')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('用户明确确认', result.stderr)
@@ -116,7 +134,7 @@ class PreferenceTests(unittest.TestCase):
         before = path.read_bytes()
         state = json.loads(before)
         self.assertEqual(state['selection_source'], {'platform': 'config', 'perspective': 'explicit'})
-        self.flags('WeChat=false\nRednote=true\nSelfMediaBlogger=true\n')
+        self.flags('WeChat=false\nRednote=true\nWriterRole=SelfMediaBlogger\n')
         result = self.run_cli('workflow', 'status', str(path.parent))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('任务平台：微信；写作视角：产品经理', result.stdout)
@@ -141,7 +159,7 @@ class PreferenceTests(unittest.TestCase):
         path.write_text(json.dumps({'version': 1, 'title': '旧任务', 'type': 'product',
                                     'revision': 0, 'completed': []}))
         before = path.read_bytes()
-        self.flags('Rednote=true\nSelfMediaBlogger=true\n')
+        self.flags('Rednote=true\nWriterRole=SelfMediaBlogger\n')
         result = self.run_cli('workflow', 'status', str(existing))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('任务平台：微信；写作视角：产品经理', result.stdout)

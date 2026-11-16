@@ -24,7 +24,7 @@ class WorkspaceTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix='openwrite-test-')
         self.addCleanup(self.tmp.cleanup)
         self.directory = Path(self.tmp.name).resolve()
-        (self.directory / '.env').write_text('WeChat=true\nSelfMediaBlogger=true\n')
+        (self.directory / '.env').write_text('WeChat=true\nWriterRole=SelfMediaBlogger\n')
 
     def test_new_article_is_local_and_existing_work_is_preserved(self):
         args = Namespace(name='产品文章', title='一个主题', type='product')
