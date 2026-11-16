@@ -1,0 +1,4 @@
+# OpenWrite: core formatting, publishing, and optional API image generation
+PyYAML>=6.0
+requests>=2.31.0
+Pillow>=10.0

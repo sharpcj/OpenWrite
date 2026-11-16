@@ -5,8 +5,19 @@ __pycache__/
 *.pyd
 .venv/
 venv/
+# Local config holding real WeChat credentials (created by `openwrite.py setup`)
 .env
 .env.*
+!.env.example
+# Atomic-write temp files created next to .env by preferences.set_env_value().
+# They contain the full config including AppSecret, so they must never be tracked
+# even if a crash leaves one behind (.env.* does not match the .env- prefix).
+.env-*
+
+# Internal atomic-write / staging temp artifacts (normally inside articles/,
+# which is ignored below; listed here so they can never be committed anywhere).
+.workflow-*
+.images-*
 
 # Editor / IDE
 .idea/
@@ -23,15 +34,29 @@ output/
 *.tmp
 *.log
 
+# Test / coverage caches
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# Defensive: the publisher no longer reads this path, but a legacy file here
+# would contain AppID/AppSecret. Real credentials belong in the local .env.
+skills/wechat-draft-publisher/config.json
+
 # Note:
 # - cover.png is NOT globally ignored anymore; individual skills can choose to
 #   commit a real cover image. Skill scratch covers at the skill root were a
 #   historical mistake and have been cleaned up.
-# - config.json holds local ComfyUI paths (`comfyui_output_dir`). It IS tracked
+# - skills/openwrite-images/config.json holds ComfyUI paths and IS tracked
 #   so you have a working default; override per-machine via env vars
 #   (COMFYUI_URL / COMFYUI_OUTPUT_DIR) instead of editing the file.
 #
-# Exception: never track a real config.json inside wechat-draft-publisher —
-# that one would contain AppID/AppSecret. The live config must live at
-# ~/.wechat-publisher/config.json; only examples/config.json.example is tracked.
-wechat-draft-publisher/config.json
+# WeChat credentials (WeChatAppID / WeChatAppSecret / WeChatAuthor) live in the
+# local .env created by `python3 openwrite.py setup`. It is ignored above;
+# .env.example stays tracked as a placeholder template and must never hold
+# real secrets.
+
+# Local article workspaces (keep only the empty directory marker)
+/articles/*
+!/articles/.gitkeep

@@ -1,422 +1,214 @@
-# 微信公众号文章工具集
+# OpenWrite
 
-> 🌐 **Language**: [中文](./README.md) · [English](./README.en.md)
+[中文](README.md) · [English](README.en.md)
 
-## 📖 项目简介
+OpenWrite 是一个面向 AI Agent 的微信公众号创作工程。**在 Agent 中打开这个项目，即可按项目内的技能开展文章创作，无需安装全局 Skill。**
 
-一套面向微信公众号的 Hermes Agent 技能集，涵盖 **AI 写作助手（技术视角 / 产品视角）**、**Markdown → 公众号 HTML 格式化**、**草稿一键发布** 四个核心 skill。配合本地 ComfyUI 即可在本地完成「写稿 → 配图 → 排版 → 推送草稿箱」的全流程。
+从研究选题、写正文、生成配图，到排版和上传微信草稿，文章及其配图都保存在项目自己的工作区中。
 
-> 🙏 **致谢**：本仓库 fork 自上游项目 [BND-1/wechat_article_skills](https://github.com/BND-1/wechat_article_skills)（面向 Claude Code Skills），感谢原作者奠定的优秀基础。本仓库已整体迁移到 **Hermes Agent**，并将默认生图后端从 Gemini / DALL-E 切换为本地 ComfyUI。详见下方「与原始版本的区别」一节。
+## 开始创作
 
-## ✨ 核心工具
+1. 将本项目作为工作目录在 Agent 中打开。
+2. 让 Agent 读取根目录的 [AGENTS.md](AGENTS.md)，然后直接描述创作需求。能够自动加载项目说明的宿主会使用相应入口；若未自动读取，明确说“先读取 AGENTS.md”。
+3. Agent 按需求读取 `skills/` 下的技能，在 `articles/` 下创建文章目录并开始工作。
 
-### 1️⃣ WeChat Product Manager Writer - AI 产品经理写作助手
-从 AI 产品经理视角撰写文章。涵盖 AI 产品拆解、场景解决方案、效率提升实战、产品方法论、行业观察。
+例如：
 
-**核心特性：**
-- 🤖 产品思维驱动写作，第一人称、观点鲜明
-- 📊 强制生成内容结构图（Graphic Recording 风格信息图）
-- 🎨 强制生成专业文章封面
-- 🖼️ 按需生成内容配图（12 种 Type × 9 种 Style 风格体系）
-- 🎯 实战场景导向，非纯技术教程
+> 帮我写一篇关于 RAG 的公众号技术文章，面向非技术读者，保存到 articles/rag-guide，完成配图和排版。
 
-[📚 详细文档](./wechat-product-manager-writer/SKILL.md)
+> 从产品经理视角拆解一个 AI 搜索产品，先写正文。
 
----
+> 继续处理 articles/rag-guide，把正文改得更通俗，再重新排版。
 
-### 2️⃣ WeChat Tech Writer - AI 技术写作助手
-基于 AI 的智能技术文章写作工具，自动搜索、抓取、改写，快速生成高质量技术科普内容。
+> 把 articles/rag-guide 上传到公众号草稿箱，标题是“知识库怎么让 AI 回答得更准”。
 
-**核心特性：**
-- 🤖 AI 辅助搜索与写作
-- 🎨 强制生成专业文章封面
-- 🖼️ 按需生成内容配图（12 种 Type × 9 种 Style 风格体系）
-- 📱 面向公众号读者的通俗化表达
+`AGENTS.md` 维护统一工作约定；`CLAUDE.md` 和 `GEMINI.md` 仅引导读取同一入口。不同宿主加载项目说明的机制不同；不自动加载时，手动要求读取入口即可。完整能力取决于 Agent 的文件、命令、搜索和生图工具，详见 [Agent 接入指南](AGENT_GUIDE.md)。
 
-[📚 详细文档](./wechat-tech-writer/SKILL.md)
+## 项目结构
 
----
+```text
+OpenWrite/
+├── AGENTS.md                       # 统一创作流程与技能路由
+├── CLAUDE.md                       # 指向统一入口
+├── GEMINI.md                       # 指向统一入口
+├── AGENT_GUIDE.md                  # 运行与接入说明
+├── openwrite.py                    # 项目命令入口
+├── workflow.py                     # 七步状态与产物检查
+├── preferences.py                  # 平台与视角默认值解析
+├── .env.example                    # 配置占位模板：平台、视角、微信凭证
+├── .env                            # 本地真实配置，由 setup 生成，Git 忽略
+├── requirements.txt
+├── skills/
+│   ├── wechat-blogger-writer/
+│   ├── wechat-tech-writer/
+│   ├── wechat-product-manager-writer/
+│   ├── wechat-article-formatter/
+│   ├── wechat-draft-publisher/
+│   └── openwrite-images/
+├── articles/                       # 每篇文章独立目录，默认不提交 Git
+└── tests/                          # 工作区命令验证
+```
 
-### 3️⃣ WeChat Article Formatter - 文章格式化工具
-将 Markdown 文章转换为适合微信公众号的美化 HTML，所有样式 inline，可直接粘贴到微信编辑器。
+原有四个 Skill 的名称和自身目录名保持不变，新增独立的 `openwrite-images` 图片能力，作为工程内部能力按需读取，无需复制到用户级技能目录。
 
-**核心特性：**
-- 📝 纯手写 Markdown 解析器，零外部 Markdown 依赖
-- 🎨 四套 YAML 主题（经典蓝 / 优雅紫 / 暖橙 / 极简黑），支持自定义
-- 🔧 变量替换机制，一键换色、换字号
-- 📐 预格式化：中英文自动间距、引号转换、空行压缩
-- 🧩 支持表格、代码块、嵌套列表、图注等完整元素
+| Skill | 职责 |
+|---|---|
+| [wechat-blogger-writer](skills/wechat-blogger-writer/SKILL.md) | 默认自媒体博主视角，注重易读性、观点与实际价值 |
+| [wechat-tech-writer](skills/wechat-tech-writer/SKILL.md) | 技术科普、工具介绍；封面必需，正文配图按需 |
+| [wechat-product-manager-writer](skills/wechat-product-manager-writer/SKILL.md) | 产品视角、真实场景；封面必需，正文配图按需 |
+| [wechat-article-formatter](skills/wechat-article-formatter/SKILL.md) | Markdown 转公众号 HTML，四套 YAML 主题 |
+| [openwrite-images](skills/openwrite-images/SKILL.md) | 接收配图需求，获取、校验并保存图片；集中管理后端 |
+| [wechat-draft-publisher](skills/wechat-draft-publisher/SKILL.md) | 上传封面、正文图片和微信草稿 |
 
-[📚 详细文档](./wechat-article-formatter/SKILL.md)
+## 默认平台与写作视角
 
----
+运行时**只读取本地 `.env`**；[.env.example](.env.example) 只是打样模板，不参与解析。运行 `python3 openwrite.py setup` 会把模板复制为 `.env`（不覆盖已有文件，权限 600，已被 Git 忽略），随后所有平台、视角与凭证的修改都在 `.env` 中进行。模板给出的样例是 `WeChat=true`、`SelfMediaBlogger=true`，其他项关闭。没有 `.env` 时没有默认项，命令会要求用户明确选择。
 
-### 4️⃣ WeChat Draft Publisher - 草稿发布工具
-自动将 HTML 格式的文章推送到微信公众号草稿箱。
-
-**核心特性：**
-- ✅ 自动获取和缓存 access_token
-- ✅ 支持上传封面图片（`--cover` 参数）
-- ✅ 作者从配置文件读取，首次运行自动询问
-- ✅ 智能错误处理和重试
-- ✅ 命令行 + 交互式双模式
-
-[📚 详细文档](./wechat-draft-publisher/SKILL.md)
-
----
-
-## 🖼️ 关于配图
-
-### 配图体系：Type × Style
-
-两个写作 skill 共享同一套内容配图体系：
-
-- **12 种 Type**（画面构成）：concept / process / whiteboard / data-viz / comparison / architecture / mindmap / timeline / checklist / quote-card / scene / atmosphere
-- **9 种 Style**（视觉风格）：扁平矢量 / 简约线条 / 蓝图 / 手绘 / 水彩 / 海报 / 温暖 / 极简 / 商务
-- **自动推荐**：Agent 根据文章内容信号自动匹配 Type + Style
-- **专用 Prompt 模板**：每种 Type 有独立的 prompt 构建模板
-
-详见各 skill 的 `references/image-styles/` 目录。
-
-### 生图方式：本地 ComfyUI
-
-两个写作类 skill 各自内嵌 ComfyUI 调用脚本（`scripts/comfyui_gen.py`）和 workflow 模板（`templates/image_z_image.json`）：
-
-- ✅ 调用本地 ComfyUI（默认 `http://localhost:6677`），用本地算力
-- ✅ 按 KSampler 的 positive/negative 引用精确注入提示词
-- ✅ 配置走各 skill 自己的 `config.json` + 环境变量覆盖
-- ✅ 封面图 2.35:1（1024×432）、内容配图 4:3（1024×768）
-
-> 设计取向：**每个 skill 都可以独立安装、独立使用**，因此两边的 `comfyui_gen.py` 是有意维护的两份副本。修改时请记得同步两边。
->
-> ComfyUI 未启动时，skill 不会静默退回；它会先告诉你「本地 ComfyUI 未在线」，让你选择手动启动 ComfyUI 或改用 Hermes 内置的 `image_generate`。
-
----
-
-## 🚀 快速开始
-
-### 安装到你的 ~/.hermes/skills
+**本次提示词明确指定 > 配置中唯一启用项 > 用户明确确认**。平台与视角分别判断；同组全部关闭或同时启用多个时，未指定的维度需要确认。
 
 ```bash
-# 克隆项目
-git clone <repository-url>
-# 把各个 skill 文件夹复制到你的 ~/.hermes/skills 目录下
-# 然后在 Hermes 中通过 skills_list / skill_view 即可看到并加载这些技能
+python3 openwrite.py preferences
+python3 openwrite.py new my-topic --title "文章主题"
+# 用户明确指定产品经理视角时，覆盖本次任务视角，不改长期配置
+python3 openwrite.py new product-topic --title "产品主题" --perspective product
 ```
 
-### 典型工作流程
+选择写入任务状态，继续任务不受后来默认配置修改影响。小红书可选择并记录，但对应创作和发布适配尚未实现，不能调用微信流程继续。详见 [平台与视角选择](docs/task-selection.md)。
 
-**全流程一句话搞定**
-```
-帮我写一篇介绍 Claude code 的文章，并且进行格式美化，然后推送到微信公众号后台
-```
+## 环境准备
 
-**分步执行**
-```bash
-# 1. 写文章（自动生成封面图 cover.png）
-#    对 Hermes 说：「写一篇关于 XXX 的公众号文章」
-
-# 2. 格式化
-cd wechat-article-formatter
-python scripts/markdown_to_html.py --input 文章.md --theme default
-
-# 3. 发布（封面图通过 --cover 参数上传，不插入正文）
-cd ../wechat-draft-publisher
-python publisher.py --title "标题" --content ../文章.html --cover ../cover.png
-```
-
----
-
-## 📂 项目结构
-
-```
-wechat_article_skills/
-├── wechat-tech-writer/              # AI 技术写作 skill
-│   ├── SKILL.md
-│   ├── config.json                  # ComfyUI 配置
-│   ├── scripts/
-│   │   ├── comfyui_gen.py           # 本地 ComfyUI 生图（首选）
-│   │   └── generate_image.py        # Gemini / DALL-E 直连（备选）
-│   ├── templates/
-│   │   └── image_z_image.json       # ComfyUI workflow 模板
-│   └── references/
-│       ├── image-styles/            # 配图风格库（Type × Style）
-│       │   ├── styles.md            #   12 种 Type + 9 种 Style
-│       │   ├── style-presets.md     #   按文章类型的预设组合
-│       │   ├── auto-selection.md    #   自动推荐规则
-│       │   └── prompt-construction.md # 每种 Type 的 prompt 模板
-│       ├── cover-image-guide.md     # 封面图生成指南
-│       ├── content-images-guide.md  # 内容配图指南
-│       └── writing-style.md         # 写作风格指南
-│
-├── wechat-product-manager-writer/   # AI 产品经理视角写作 skill
-│   ├── SKILL.md
-│   ├── config.json
-│   ├── scripts/                     # 与 tech-writer 同步维护
-│   ├── templates/
-│   └── references/
-│       ├── image-styles/            # 配图风格库（同上结构）
-│       ├── cover-image-guide.md
-│       └── structure-image-guide.md # 内容结构图指南
-│
-├── wechat-article-formatter/        # Markdown → 公众号 HTML 排版
-│   ├── SKILL.md
-│   ├── scripts/
-│   │   ├── markdown_to_html.py      # 核心转换脚本（纯手写解析器）
-│   │   └── convert-code-blocks.py   # 代码块微信兼容转换
-│   ├── themes/                      # YAML 主题文件
-│   │   ├── default.yaml             #   经典蓝
-│   │   ├── grace.yaml               #   优雅紫
-│   │   ├── modern.yaml              #   暖橙
-│   │   └── simple.yaml              #   极简黑
-│   ├── templates/                   # 旧 CSS 主题（保留兼容）
-│   └── examples/                    # HTML 示例模板
-│
-├── wechat-draft-publisher/          # HTML → 公众号草稿箱
-│   ├── SKILL.md
-│   ├── publisher.py                 # 核心发布脚本
-│   └── scripts/                     # HTML 优化、样式修复
-│
-└── README.md                        # 本文件
-```
-
----
-
-## 💡 使用场景
-
-### 技术博客作者
-- 使用 **WeChat Tech Writer** AI 辅助生成技术内容
-- 使用 **Article Formatter** 的 YAML 主题美化排版
-- 使用 **Draft Publisher** 一键发布
-
-### 产品经理 / 内容运营
-- 使用 **WeChat Product Manager Writer** 从产品视角写作
-- 使用 **Article Formatter** 切换主题适配不同风格
-- 自动化发布流程，提升效率
-
-### 自媒体创作者
-- 在 Markdown 中专注写作
-- 一键转换为精美排版
-- 快速发布到公众号
-
----
-
-## 📋 系统要求
-
-- **Python**: 3.8+
-- **依赖**: PyYAML（formatter 需要）
-- **操作系统**: Windows / macOS / Linux
-- **微信公众号**: 认证的服务号或订阅号（用于 API 发布）
-- **ComfyUI（可选）**: 本地部署并启动的 ComfyUI（默认 `http://localhost:6677`），供写作 skill 生图使用
-
----
-
-## 🔧 配置说明
-
-### WeChat Draft Publisher 配置
-
-创建配置文件 `~/.wechat-publisher/config.json`：
-
-```json
-{
-  "appid": "wx1234567890abcdef",
-  "appsecret": "your_appsecret_here",
-  "author": "你的作者名"
-}
-```
-
-- `appid` / `appsecret`：从微信公众平台「设置与开发 → 基本配置」获取
-- `author`：可选，首次运行未配置时会自动询问并保存
-
-### ComfyUI 生图配置（可选）
-
-编辑 `wechat-tech-writer/config.json` 和 `wechat-product-manager-writer/config.json`：
-
-```json
-{
-  "comfyui_url": "http://localhost:6677",
-  "comfyui_output_dir": "/home/yourname/comfyui_output"
-}
-```
-
-也可以用环境变量临时覆盖：
+文本写作可以先开始；执行生图、排版和发布脚本时需要相应运行环境。
 
 ```bash
-export COMFYUI_URL="http://localhost:6677"
-export COMFYUI_OUTPUT_DIR="$HOME/comfyui_output"
+python3 -m venv .venv
+# macOS / Linux
+source .venv/bin/activate
+# Windows PowerShell 使用 .venv\Scripts\Activate.ps1
+python3 -m pip install -r requirements.txt
+python3 openwrite.py doctor
+# 需要上传草稿时，生成本地配置并填写微信凭证
+python3 openwrite.py setup
 ```
 
-> ⚠️ 仓库里默认的 `comfyui_output_dir` 是作者本机路径，**克隆后请改成你自己的目录**。
+需要 Python 3.8+。核心依赖为 PyYAML、Requests 和 Pillow。`doctor` 只检查本地依赖、技能入口和模板，不调用 ComfyUI 或微信 API。`setup` 只复制配置模板，不联网、不写入任何密钥。
 
----
+## 文章工作区
 
-## 📚 文档资源
+每篇文章的资料、正文与图片保存在一起，便于更换 Agent 后继续处理：
 
-### 各工具详细文档
-- [WeChat Article Formatter 技能文档](./wechat-article-formatter/SKILL.md)
-- [WeChat Draft Publisher 技能文档](./wechat-draft-publisher/SKILL.md)
-- [WeChat Tech Writer 技能文档](./wechat-tech-writer/SKILL.md)
-- [WeChat Product Manager Writer 技能文档](./wechat-product-manager-writer/SKILL.md)
+```text
+articles/rag-guide/
+├── brief.md             # 需求、资料、约束、进展与待办
+├── workflow.json        # 代码管理的七步状态
+├── outline.md           # 备选标题、大纲与讨论记录
+├── outline.json         # 用户对标题与大纲的确认记录
+├── sources.json         # 来源及实际提取内容
+├── analysis.md          # 资料分析与来源关联
+├── draft.md             # 第三步正文草稿（不嵌图）
+├── article.md           # 第六步由程序整合生成
+├── publish-manifest.json # 第七步：可发布产物的元数据与指纹
+├── image-requests.json  # 写作侧定义的配图需求
+├── image-results.json   # 图片能力返回的实际结果
+├── cover.png            # 单独上传，不嵌入正文
+├── structure.png        # 按需生成的正文结构图
+├── architecture.png     # 按需生成的正文配图
+├── content-images.json  # 是否需要正文配图及理由
+└── article.html         # 最终排版结果
+```
 
-### 配图体系文档
-- [正文配图风格库（Type × Style）](./wechat-tech-writer/references/image-styles/styles.md)
-- [按文章类型的预设组合](./wechat-tech-writer/references/image-styles/style-presets.md)
-- [自动推荐规则](./wechat-tech-writer/references/image-styles/auto-selection.md)
-- [Prompt 构建指南](./wechat-tech-writer/references/image-styles/prompt-construction.md)
+整体分三个模块：**下发需求 → 写作 → 发布**。需求与发布需要用户确认；写作是七步工作流，最终交付可发布产物。
 
----
+三种写作视角统一固定为：
 
-## 📝 示例文章
+**搜索资料 → 分析资料 → 写正文 → 生成封面 → 按需生成正文配图 → 生成 Markdown → 排版并保存可发布产物**
 
-使用本工具集创作和发布的精选文章：
+分析完成后、写正文之前有一个**标题与大纲检查点**：给出三个备选标题（至少一个激进悬念、一个客观中性，第三个默认利益实用）与大纲，由用户选定标题并确认大纲后才生成全文，可反复讨论修改。是否启用由 `.env` 的 `OutlineApproval` 控制（默认开启），用户明确授权时可用 `new --skip-outline` 跳过。
 
-1. **[Claude Code 零基础指南：不会写代码也能做开发？看这一篇就够了，效率翻倍！](https://mp.weixin.qq.com/s/Dx-XYcj74c2LdZOWwNS7GQ)**
+结构图属于可选正文配图，不再强制生成。第七步完成即代表产物可发布；上传仍需用户明确确认。用户可以只要求其中一个阶段，或继续未完成阶段；没有实际生成的图片不能当作已交付产物。
 
-2. **[从70分钟到9分钟：微信公众号自动化Skills！提效狂魔！](https://mp.weixin.qq.com/s/iBKgEX_vfYNIe90qPi03Sw)**
+文章目录默认忽略 Git，避免将个人稿件混入工程源码。需要共享稿件时，可以单独管理或明确加入版本控制。
 
-3. **[从 Chat 到 Agent：Claude Agent SDK 才是 AI 真正的生产力开关](https://mp.weixin.qq.com/s/58nZuLJGNjm6hqfGzJg-ZA)**
+## 按步骤推进
 
-4. **[Claude Skill：为什么它会取代 Dify、n8n 和 Coze？](https://mp.weixin.qq.com/s/rXl4nLI6ouJMIMfvL1iSbQ)**
+Agent 仍负责研究、分析、写作和验收，代码负责检查产物与顺序。每篇文章通过 `workflow.json` 持久化进度，不需要数据库。
 
-> 💡 以上文章均使用本项目工具完成排版和发布。
+```bash
+python3 openwrite.py new rag-guide --title "知识库怎么让 AI 回答得更准" --type tech
+python3 openwrite.py workflow status articles/rag-guide
 
----
+# 实际搜索并写入 sources.json 后，提交第一步
+python3 openwrite.py workflow complete articles/rag-guide --step search
+# 完成 analysis.md 后提交第二步
+python3 openwrite.py workflow complete articles/rag-guide --step analysis
+# 给出三个备选标题与大纲（outline.md / outline.json），用户确认后再写 draft.md
+python3 openwrite.py workflow complete articles/rag-guide --step draft
 
-## ⚠️ 注意事项
+# 取得封面并实际检查画面后提交
+python3 openwrite.py workflow complete articles/rag-guide --step cover --reviewed --note "标题、色调和构图符合要求"
+# 明确无需正文配图时，先保存 content-images.json 的决策和理由
+python3 openwrite.py workflow complete articles/rag-guide --step content
+# 需要配图时应先取得并验收，提交时加 --reviewed --note
 
-1. **API 调用限制**
-   - access_token 每日获取次数有限（2000次/天）
-   - 本工具自动缓存 token，请勿频繁重置
+# 第六步：整合生成 article.md
+python3 openwrite.py workflow finalize articles/rag-guide
+# 第七步：排版、可发布性检查、写入 publish-manifest.json 并自动完成
+python3 openwrite.py format articles/rag-guide --theme default
+# 保留正文和代码的原始引号、间距可加 --no-preformat
+# 只有用户明确确认发布时执行；标题默认取自已确认的发布清单
+python3 openwrite.py publish articles/rag-guide
+```
 
-2. **图片使用规范**
-   - 封面图通过 `--cover` 参数单独上传，不插入正文
-   - 封面图片建议尺寸：900x500 像素
-   - 图片大小不超过 2MB
+不能跳步；产物不完整不会推进。正文配图可以没有，但必须明确记录理由。图片是否符合主题、文字和构图由执行者实际检查，代码记录其验收确认，不自动判断内容质量。第七步还会检查标题/作者/摘要长度、封面大小与格式、代码块转换和本地图片是否存在，不通过则保留上一次成功的 HTML。
 
-3. **样式兼容性**
-   - 微信编辑器对 CSS 支持有限（不支持伪元素、渐变、阴影等）
-   - Formatter 输出的 HTML 所有样式已 inline，可直接粘贴
-   - 代码块需运行 `convert-code-blocks.py` 转为微信兼容格式
+需要修改正文时：
 
----
+```bash
+python3 openwrite.py workflow reset articles/rag-guide --from draft
+```
 
-## 🐛 故障排除
+退回保留文件，清除该阶段及下游状态。内容指纹会检测已完成产物是否变化，防止沿用过期配图或排版；更换 Agent 后通过 `status` 继续。现有文章可用 `workflow init <目录>` 初始化，再按步骤提交已有产物。只换主题重排版时 `reset --from format` 即可；产物在用户确认后被修改，需重新排版并重新确认发布。
 
-### 常见问题
+完整文件协议与示例见 [七步工作流](docs/workflow.md)。主题支持 `default`、`grace`、`modern`、`simple`。可用 `python3 openwrite.py --help` 查看命令。
 
-**Q: 粘贴后样式丢失？**
-- 使用 Chrome 或 Edge 浏览器
-- 尝试全选复制而非部分复制
-- 确保使用「粘贴」而非「粘贴并匹配样式」
+## 配图与发布配置
 
-**Q: access_token 获取失败？**
-- 检查 AppID 和 AppSecret 是否正确
-- 确认公众号已认证
-- 检查 IP 白名单配置
+写作 Skill 定义“配什么图”，独立的 [openwrite-images](skills/openwrite-images/SKILL.md) 负责“图片怎么来”。两者通过 [配图交接协议](docs/image-contract.md) 协作，写作 Skill 不感知后端配置、模型与 API 参数。
 
-**Q: 作者名未设置？**
-- 首次运行 publisher.py 时会自动询问并保存到 `~/.wechat-publisher/config.json`
-- 也可以手动编辑配置文件添加 `"author"` 字段
+```bash
+# 按当前文章的 image-requests.json 执行一项图片需求
+python3 openwrite.py image articles/rag-guide --id cover --backend comfyui
+# 宿主工具、绘图软件或用户提供图片后，按同一需求导入并校验
+python3 openwrite.py image articles/rag-guide --id cover --backend file --source /path/to/cover.png
+```
 
-更多问题请查看各工具的详细文档或提交 Issue。
+图片能力集中保留 ComfyUI 和 Gemini / DALL-E 备用实现，配置唯一位置为 `skills/openwrite-images/config.json`。宿主工具通过其实际接口获取图片，再导入文件。默认严格检查尺寸；留白适配、裁剪和覆盖须显式指定。执行结果只表示文件可用，仍需按写作规则检查图片内容。
 
----
+公众号凭证与平台、视角放在同一套项目配置中：`.env.example` 是占位模板，真实值写在本地 `.env`。
 
-## 🔀 与原始版本的区别
+```bash
+python3 openwrite.py setup   # 复制 .env.example 为 .env，已存在则不覆盖
+```
 
-本仓库 fork 自一个面向 **Claude Code** 的 WeChat Skills 项目，整体迁移到 **Hermes Agent**，并对默认生图后端、运行环境、写作视角做了一轮重构。下面是与原始版本相比的主要变化。
+然后编辑 `.env`：
 
-### 1. 运行环境：Claude Code → Hermes Agent
+```dotenv
+WeChatAppID=wx1234567890abcdef
+WeChatAppSecret=你的_appsecret
+WeChatAuthor=你的作者名
+```
 
-| 维度 | 原始版本 | 当前版本 |
-|------|---------|---------|
-| 目标 Agent | Claude Code Skills | Hermes Agent Skills |
-| 安装目录 | `~/.claude/skills/` | `~/.hermes/skills/` |
-| Frontmatter `allowed-tools` | 用 `WebSearch, WebFetch, Read, Write, Edit, Bash` | 已移除（Hermes 不需要这个字段） |
-| 工具调用 | `WebSearch` / `WebFetch` / `Write` | `web_search` / `web_extract` / `browser_navigate` / `write_file` |
-| skill 描述 | 较简短 | 触发词扩充，覆盖更多自然语言表达 |
+`.env` 已被 `.gitignore` 忽略，`setup` 会将其权限设为 600；不要把真实密钥写入 `.env.example` 或提交到仓库。未配置凭证时 `publish` 会报错并给出上述指引，不再读取 `~/.wechat-publisher/config.json`。access_token 缓存仍在 `~/.wechat-publisher/token_cache.json`。
 
-### 2. 默认生图后端：Gemini / DALL-E → 本地 ComfyUI
+Skill 是项目级的，无需全局安装；仍需配置实际使用的图片来源或公众号等外部服务。发布器创建草稿，最终群发在微信后台操作。
 
-| 维度 | 原始版本 | 当前版本 |
-|------|---------|---------|
-| 首选生图方式 | `generate_image.py` 直连 Gemini / DALL-E | 本地 ComfyUI（`comfyui_gen.py` + workflow 模板） |
-| 配置方式 | 环境变量 `GEMINI_API_KEY` / `OPENAI_API_KEY` | 各 skill 自己的 `config.json`，支持环境变量覆盖 |
-| 离线兜底 | 密钥失效就生不了图 | ComfyUI 未启动时先告知用户，由用户选择手动启动或改用 `image_generate` |
-| 尺寸约定 | 各处写法不统一 | 统一：封面 2.35:1（1024×432）、内容/结构图 4:3（1024×768） |
+## 开发验证
 
-### 3. 格式化器：CSS 主题 → YAML 主题
+```bash
+python3 -m unittest discover -s tests -v
+```
 
-| 维度 | 原始版本 | 当前版本 |
-|------|---------|---------|
-| Markdown 解析 | Python `markdown` 库 + BeautifulSoup + cssutils | 纯手写解析器，零外部 Markdown 依赖 |
-| 主题系统 | 3 套 CSS 文件 | 4 套 YAML 主题（经典蓝/优雅紫/暖橙/极简黑），支持变量替换 |
-| 依赖 | 6 个 pip 包 | 1 个（PyYAML） |
-| 预格式化 | 无 | 中英文间距、引号转换、空行压缩 |
+旧版实时预览与批量排版脚本尚未适配当前排版器；项目入口使用当前核心转换脚本。
 
-### 4. 配图体系：从简单决策到 Type × Style
+## 来源与许可证
 
-| 维度 | 原始版本 | 当前版本 |
-|------|---------|---------|
-| 配图类型 | 5 种（柱状图/架构图/对比图/流程图/雷达图） | 12 种 Type + 9 种 Style，含专用 prompt 模板 |
-| 风格选择 | 手动指定 | Agent 根据文章内容信号自动推荐 |
-| 配图数量 | 硬上限 0-2 张 | 按需生成，每 H2 最多 1 张，宁缺毋滥 |
-| 封面图 | 插入正文 | 发布时 `--cover` 参数单独上传 |
-
-### 5. 发布器：作者配置优化
-
-- 作者从 `~/.wechat-publisher/config.json` 读取 `author` 字段
-- 未配置时首次运行自动询问并保存
-- 命令行 `--author` 参数优先级最高
-
-### 6. 新增「AI 产品经理视角」写作 skill
-
-`wechat-product-manager-writer/` 是相对原版新增的写作 skill：
-- 第一人称、观点鲜明、实战导向
-- 五类内容方向：产品拆解 / 场景解决方案 / 效率提升实战 / 产品方法论 / 行业观察
-- 强制生成内容结构图（Graphic Recording 风格）
-
----
-
-## 📝 更新日志
-
-### v3.2.0 (2026-06-23)
-- 🎨 Formatter 重构：用 YAML 主题系统替换 CSS + BeautifulSoup 方案，4 套精调主题
-- 🖼️ 配图体系升级：引入 12 种 Type × 9 种 Style 风格库，含专用 prompt 模板和自动推荐规则
-- 📝 封面图不再插入正文，发布时通过 `--cover` 参数单独上传
-- 👤 发布器作者改为从配置文件读取，首次运行自动询问
-- 📦 Formatter 依赖从 6 个精简为 1 个（PyYAML）
-
-### v3.0.0 (2026-06-22) · Hermes 迁移版
-- 🔁 整体从 Claude Code Skills 迁移到 **Hermes Agent**
-- 🖼️ 默认生图后端从 Gemini/DALL-E 切换为本地 ComfyUI
-- 🛡️ ComfyUI 未启动时不再静默退回
-- 📐 统一封面图与内容/结构图的尺寸约定
-- 📦 强化「每个 skill 可独立安装」原则
-
-### v2.0.0 (2026-01-16)
-- 🚀 新增 `WeChat Product Manager Writer`
-- 🎨 支持强制生成内容结构图与专业封面
-
-### v1.0.0 (2025-12-28)
-- ✅ 发布三个核心工具
-
----
-
-## 📄 许可证
-
-MIT License - 供个人和商业使用
-
----
-
-## 🙏 致谢
-
-感谢以下开源项目：
-- [PyYAML](https://pyyaml.org/)
-- [Requests](https://requests.readthedocs.io/)
-
----
-
-**祝你使用愉快！** 🎉
-
-如有问题或建议，欢迎通过 GitHub Issues 反馈！
+本工程 fork 自 [BND-1/wechat_article_skills](https://github.com/BND-1/wechat_article_skills)，曾适配 Hermes Agent，现以 OpenWrite 为独立工程提供项目级通用 Agent 工作流。感谢上游作者。遵循 [MIT License](LICENSE)。
