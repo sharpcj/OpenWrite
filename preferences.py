@@ -29,7 +29,10 @@ XHS_CREDENTIALS = {'XhsCreatorCookie': 'cookie'}
 # Single-valued writer role; the legacy boolean perspective switches are rejected.
 WRITER_ROLE_KEY = 'WriterRole'
 DEFAULT_WRITER_ROLE = 'SelfMediaBlogger'
-KNOWN_KEYS = set(PLATFORMS) | {WRITER_ROLE_KEY} | set(CREDENTIALS) | set(XHS_CREDENTIALS)
+# Image-source addresses and keys; consumed by skills/openwrite-images.
+IMAGE_KEYS = {'COMFYUI_SERVER_URL', 'FAL_KEY', 'FAL_AI_API_KEY', 'TENCENT_TOKENHUB_API_KEY',
+              'PEXELS_API_KEY', 'PIXABAY_API_KEY', 'UNSPLASH_ACCESS_KEY'}
+KNOWN_KEYS = set(PLATFORMS) | {WRITER_ROLE_KEY} | set(CREDENTIALS) | set(XHS_CREDENTIALS) | IMAGE_KEYS
 PLACEHOLDERS = {'', 'your_appid', 'your_appid_here', 'your_appsecret', 'your_appsecret_here',
                 'your_author', 'your_author_here', 'changeme',
                 'your_cookie', 'your_cookie_here', 'your_xhs_cookie_here'}

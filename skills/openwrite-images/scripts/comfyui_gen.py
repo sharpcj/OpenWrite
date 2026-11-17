@@ -27,6 +27,7 @@ ComfyUI 生图 API Wrapper
 """
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -36,9 +37,19 @@ import urllib.request
 import urllib.error
 
 
-# 配置加载优先级：环境变量 > skill 内 config.json > 内置默认值
+def _load_sibling(name: str):
+    spec = importlib.util.spec_from_file_location(
+        name, os.path.join(os.path.dirname(os.path.abspath(__file__)), f'{name}.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+image_config = _load_sibling('image_config')
+
+# 配置加载优先级：环境变量 > 项目 .env > skill 内 config.json > 内置默认值。
+# 服务地址与密钥只来自 .env / 环境变量；config.json 只保留模型与规则。
 _DEFAULTS = {
-    "comfyui_url": "http://localhost:6677",
     "comfyui_output_dir": os.path.expanduser("~/comfyui_output"),
     "default_profile": "auto",
     "auto_rules": {
@@ -68,7 +79,6 @@ def _skill_dir() -> str:
 def _load_config() -> dict:
     """读取 skill 根目录的 config.json。profiles / auto_rules 做合并而不是整体覆盖。"""
     cfg = {
-        "comfyui_url": _DEFAULTS["comfyui_url"],
         "comfyui_output_dir": _DEFAULTS["comfyui_output_dir"],
         "default_profile": _DEFAULTS["default_profile"],
         "auto_rules": dict(_DEFAULTS["auto_rules"]),
@@ -78,7 +88,7 @@ def _load_config() -> dict:
     try:
         with open(cfg_path, encoding="utf-8") as f:
             data = json.load(f)
-        for k in ("comfyui_url", "comfyui_output_dir", "default_profile"):
+        for k in ("comfyui_output_dir", "default_profile"):
             if data.get(k):
                 cfg[k] = data[k]
         if isinstance(data.get("auto_rules"), dict):
@@ -90,12 +100,11 @@ def _load_config() -> dict:
     except (FileNotFoundError, json.JSONDecodeError):
         pass
 
-    # 环境变量优先级最高
-    cfg["comfyui_url"] = os.environ.get("COMFYUI_URL", cfg["comfyui_url"])
-    cfg["comfyui_output_dir"] = os.environ.get(
+    # 环境变量 / .env 优先级最高
+    cfg["comfyui_output_dir"] = image_config.setting(
         "COMFYUI_OUTPUT_DIR", cfg["comfyui_output_dir"]
     )
-    cfg["default_profile"] = os.environ.get(
+    cfg["default_profile"] = image_config.setting(
         "COMFYUI_PROFILE", cfg["default_profile"]
     )
     output_dir = cfg["comfyui_output_dir"] or ""
@@ -104,13 +113,48 @@ def _load_config() -> dict:
 
 
 _CONFIG = _load_config()
-COMFYUI_URL = _CONFIG["comfyui_url"]
 OUTPUT_DIR = _CONFIG["comfyui_output_dir"]
 DEFAULT_PROFILE = _CONFIG["default_profile"]
 AUTO_RULES = _CONFIG["auto_rules"]
 PROFILES = _CONFIG["profiles"]
 POLL_INTERVAL = 2  # 秒
 DEFAULT_TIMEOUT = 600  # 秒
+
+_RESOLVED_URL = None
+
+
+def server_url() -> str:
+    """解析实际使用的 ComfyUI 地址（惰性，避免导入时联网）。
+
+    COMFYUI_SERVER_URL 可配置多个逗号分隔地址；本地（loopback）地址优先，
+    其余按配置顺序探测，取第一个可达者。单地址时直接使用，连接失败在
+    提交任务时报告。
+    """
+    global _RESOLVED_URL
+    if _RESOLVED_URL:
+        return _RESOLVED_URL
+    candidates = image_config.comfyui_urls()
+    if len(candidates) == 1:
+        _RESOLVED_URL = candidates[0]
+        return _RESOLVED_URL
+    errors = []
+    for url in candidates:
+        try:
+            with urllib.request.urlopen(f"{url}/system_stats", timeout=3) as resp:
+                if resp.status == 200:
+                    _RESOLVED_URL = url
+                    print(f"[INFO] ComfyUI 多地址探测：使用 {url}", file=sys.stderr)
+                    return _RESOLVED_URL
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            errors.append(f"{url}（{getattr(exc, 'reason', exc)}）")
+    raise ValueError(
+        "配置的 ComfyUI 地址均不可达：" + "；".join(errors)
+        + "。请启动服务或修改 .env 的 COMFYUI_SERVER_URL"
+    )
+
+
+# 向后兼容：旧代码/脚本引用的常量取首个候选地址；实际请求以 server_url() 为准。
+COMFYUI_URL = image_config.comfyui_urls()[0]
 
 # 直接挂 positive/negative 的采样器节点
 DIRECT_SAMPLER_CLASSES = ("KSampler", "KSamplerAdvanced")
@@ -256,9 +300,10 @@ def resolve_workflow_path(workflow_arg, profile: str) -> str:
 
 def submit_prompt(workflow: dict) -> str:
     """提交生图任务，返回 prompt_id"""
+    base = server_url()
     body = json.dumps({"prompt": workflow}).encode("utf-8")
     req = urllib.request.Request(
-        f"{COMFYUI_URL}/prompt",
+        f"{base}/prompt",
         data=body,
         headers={"Content-Type": "application/json"},
     )
@@ -271,7 +316,7 @@ def submit_prompt(workflow: dict) -> str:
         sys.exit(1)
     except urllib.error.URLError as e:
         print(
-            f"ERROR: 无法连接 ComfyUI ({COMFYUI_URL})，请确认 ComfyUI 已启动",
+            f"ERROR: 无法连接 ComfyUI ({base})，请确认 ComfyUI 已启动",
             file=sys.stderr,
         )
         print(f"  详细: {e.reason}", file=sys.stderr)
@@ -288,11 +333,12 @@ def submit_prompt(workflow: dict) -> str:
 
 def wait_for_result(prompt_id: str, timeout: int) -> dict:
     """轮询等待生图完成，返回 history 中该 prompt 的输出"""
+    base = server_url()
     start = time.time()
     while time.time() - start < timeout:
         time.sleep(POLL_INTERVAL)
         try:
-            with urllib.request.urlopen(f"{COMFYUI_URL}/history/{prompt_id}", timeout=30) as resp:
+            with urllib.request.urlopen(f"{base}/history/{prompt_id}", timeout=30) as resp:
                 history = json.loads(resp.read())
         except urllib.error.URLError:
             continue

@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Fulfil one backend-neutral image request and return a verified local artifact."""
+"""Fulfil one backend-neutral image request and return a verified local artifact.
+
+Sources: local ComfyUI, online generation (fal.ai / Tencent Hunyuan), free
+stock libraries (Pexels / Pixabay / Unsplash), existing local files (host
+tool output, user art, official-doc illustrations downloaded by the agent)
+and HTML card rendering. `--backend auto` walks the configured priority
+order and falls back on failure; the request may pin its own order via
+`preferred_sources`. Addresses and keys live in the project .env.
+"""
 from __future__ import annotations
 
 import argparse
@@ -19,6 +27,37 @@ def load_module(name: str, filename: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+image_config = load_module('openwrite_image_config', 'image_config.py')
+
+OVERLAY_POSITIONS = ('bottom-left', 'bottom-center', 'bottom-right',
+                     'top-left', 'top-center', 'top-right',
+                     'center-left', 'center')
+
+
+def _validate_overlay(item: dict) -> None:
+    overlay = item['overlay']
+    if not isinstance(overlay, dict):
+        raise ValueError('overlay 必须是对象，描述封面标题/副标题叠字')
+    if item.get('role') != 'cover':
+        raise ValueError('overlay 叠字仅用于封面（role: cover）')
+    if 'card' in item:
+        raise ValueError('overlay 与 card 不能同时使用；卡片文字由 html 后端排版')
+    if not isinstance(overlay.get('title'), str) or not overlay['title'].strip():
+        raise ValueError('overlay 需有非空 title（微信封面使用已确认的文章标题）')
+    if item.get('text'):
+        raise ValueError('配置 overlay 叠字时底图不应再渲染画面文字；请把 text 置空，避免文字重复')
+    for key in ('subtitle', 'color', 'font'):
+        if key in overlay and not isinstance(overlay[key], str):
+            raise ValueError(f'overlay.{key} 必须是字符串')
+    if 'position' in overlay and overlay['position'] not in OVERLAY_POSITIONS:
+        raise ValueError(f'overlay.position 只能为 {", ".join(OVERLAY_POSITIONS)}')
+    for key in ('font_size', 'subtitle_size'):
+        if key in overlay and (type(overlay[key]) is not int or not 8 <= overlay[key] <= 512):
+            raise ValueError(f'overlay.{key} 必须为 8–512 的整数')
+    if 'scrim' in overlay and type(overlay['scrim']) is not bool:
+        raise ValueError('overlay.scrim 必须是布尔值')
 
 
 def load_request(article: Path, request_id: str) -> dict:
@@ -75,6 +114,24 @@ def load_request(article: Path, request_id: str) -> dict:
             if key in item and (not isinstance(item[key], list)
                                 or not all(isinstance(v, str) for v in item[key])):
                 raise ValueError(f'{key} 必须是字符串列表')
+        if 'preferred_sources' in item:
+            sources = item['preferred_sources']
+            if (not isinstance(sources, list) or not sources
+                    or not all(isinstance(v, str) and v in image_config.BACKENDS for v in sources)
+                    or len(set(sources)) != len(sources)):
+                raise ValueError(f'preferred_sources 必须是不重复的后端列表（可选：{", ".join(image_config.BACKENDS)}）')
+        if 'source_file' in item and not isinstance(item['source_file'], str):
+            raise ValueError('source_file 必须是已有图片的文件路径字符串')
+        if 'source_url' in item and not isinstance(item['source_url'], str):
+            raise ValueError('source_url 必须是字符串，记录图片原始出处（如官方文档插图链接）')
+        if 'attribution' in item and not isinstance(item['attribution'], str):
+            raise ValueError('attribution 必须是字符串，记录版权/署名信息')
+        if 'keywords' in item and (not isinstance(item['keywords'], list)
+                                   or not item['keywords']
+                                   or not all(isinstance(v, str) and v.strip() for v in item['keywords'])):
+            raise ValueError('keywords 必须是非空字符串列表，供图库搜索使用')
+        if 'overlay' in item:
+            _validate_overlay(item)
         if name == request_id:
             selected = item
     if selected is None:
@@ -95,22 +152,31 @@ def build_prompt(request: dict) -> str:
     return '\n'.join(parts)
 
 
-def obtain_source(args: argparse.Namespace, request: dict, staging: Path) -> Path:
-    if args.profile and args.backend != 'comfyui':
-        raise ValueError('--profile 仅适用于 ComfyUI')
-    if args.backend == 'file':
-        if not args.source:
-            raise ValueError('file 方式需要 --source，传入已有图片或宿主工具的实际输出')
-        return Path(args.source).expanduser().resolve()
-    if args.source:
+def _file_source(args: argparse.Namespace, request: dict) -> Path:
+    source = args.source or request.get('source_file')
+    if not source:
+        raise ValueError('file 方式需要 --source 或需求中的 source_file（已有图片、宿主工具输出或官方文档插图）')
+    return Path(source).expanduser().resolve()
+
+
+def obtain_backend(backend: str, args: argparse.Namespace, request: dict, staging: Path):
+    """Run one backend; return (local file, provenance metadata)."""
+    if backend == 'file':
+        meta = {}
+        if request.get('source_url'):
+            meta['source_url'] = request['source_url']
+        if request.get('attribution'):
+            meta['attribution'] = request['attribution']
+        return _file_source(args, request), meta
+    if args.source and backend != 'file':
         raise ValueError('--source 仅适用于 file 方式')
-    if args.backend == 'html':
+    if backend == 'html':
         if not isinstance(request.get('card'), dict):
             raise ValueError('html 方式需要 card 字段，描述卡片版式与内容')
         module = load_module('openwrite_card', 'render_card.py')
-        return Path(module.render(request, staging / 'card.png')).resolve()
+        return Path(module.render(request, staging / 'card.png')).resolve(), {}
     prompt = build_prompt(request)
-    if args.backend == 'comfyui':
+    if backend == 'comfyui':
         module = load_module('openwrite_comfy', 'comfyui_gen.py')
         # Select the model from text that must appear in the image, not Chinese design prose.
         rendered_text = ' '.join(json.dumps(text, ensure_ascii=False) for text in request.get('text', []))
@@ -124,11 +190,50 @@ def obtain_source(args: argparse.Namespace, request: dict, staging: Path) -> Pat
         paths = module.extract_output_paths(result)
         if not paths:
             raise ValueError('图片后端未返回输出文件')
-        return Path(paths[0]).expanduser().resolve()
-    module = load_module('openwrite_api', 'generate_image.py')
-    cls = module.GeminiImageGenerator if args.backend == 'gemini' else module.DALLEImageGenerator
-    result = cls().generate(prompt, str(staging / 'raw.png'))
-    return Path(result).resolve()
+        return Path(paths[0]).expanduser().resolve(), {'model': profile}
+    if backend in image_config.ONLINE_BACKENDS:
+        module = load_module('openwrite_online', 'image_sources.py')
+        raw = staging / 'raw.png'
+        meta = module.generate_online(backend, prompt, raw,
+                                      request['width'], request['height'], args.timeout)
+        return raw.resolve(), meta
+    if backend in image_config.STOCK_BACKENDS:
+        if not request.get('keywords'):
+            raise ValueError(f'{backend} 图库搜索需要需求中的 keywords 字段')
+        module = load_module('openwrite_online', 'image_sources.py')
+        raw = staging / 'raw.png'
+        meta = module.fetch_stock(backend, request['keywords'], raw,
+                                  request['width'], request['height'], args.timeout)
+        return raw.resolve(), meta
+    if backend in ('gemini', 'dalle'):
+        module = load_module('openwrite_api', 'generate_image.py')
+        cls = module.GeminiImageGenerator if backend == 'gemini' else module.DALLEImageGenerator
+        result = cls().generate(prompt, str(staging / 'raw.png'))
+        return Path(result).resolve(), {}
+    raise ValueError(f'未知图片来源：{backend}')
+
+
+def obtain_source(args: argparse.Namespace, request: dict, staging: Path):
+    """Explicit-backend entry kept for compatibility; returns (path, meta)."""
+    if args.profile and args.backend != 'comfyui':
+        raise ValueError('--profile 仅适用于 ComfyUI')
+    return obtain_backend(args.backend, args, request, staging)
+
+
+def backend_available(backend: str, args: argparse.Namespace, request: dict) -> bool:
+    """Whether auto mode may attempt this backend without guaranteed failure."""
+    if backend == 'file':
+        return bool(args.source or request.get('source_file'))
+    if backend == 'html':
+        return isinstance(request.get('card'), dict)
+    if backend == 'comfyui':
+        return True
+    return bool(image_config.backend_key(backend))
+
+
+def default_fit(backend: str) -> str:
+    """Auto mode: generators hit the exact size; photos/imports are cropped."""
+    return 'cover' if backend in image_config.STOCK_BACKENDS + ('file',) else 'exact'
 
 
 def normalize(source: Path, output: Path, request: dict, fit: str) -> None:
@@ -151,11 +256,21 @@ def normalize(source: Path, output: Path, request: dict, fit: str) -> None:
         picture.save(output, format='PNG')
 
 
+def apply_overlay(normalized: Path, request: dict, staging: Path) -> Path:
+    """WeChat cover = base image + Pillow-typeset title/subtitle."""
+    module = load_module('openwrite_cover_text', 'cover_text.py')
+    output = staging / 'overlay.png'
+    module.render(normalized, output, request['overlay'], request['width'], request['height'])
+    return output
+
+
 def produce(args: argparse.Namespace) -> dict:
     article = Path(args.article).expanduser().resolve()
     if not article.is_dir():
         raise ValueError(f'文章目录不存在：{article}')
     request = load_request(article, args.id)
+    if args.profile and args.backend not in ('comfyui', 'auto'):
+        raise ValueError('--profile 仅适用于 ComfyUI')
     output = article / request['output']
     if output.is_symlink():
         raise ValueError('输出不能是符号链接')
@@ -170,19 +285,55 @@ def produce(args: argparse.Namespace) -> dict:
             or not isinstance(report.get('images'), list)
             or not all(isinstance(v, dict) for v in report['images'])):
         raise ValueError('image-results.json 格式不正确')
+    if args.backend == 'auto':
+        order = request.get('preferred_sources') or image_config.source_priority(request['role'])
+        candidates = [name for name in order if backend_available(name, args, request)]
+        skipped = [name for name in order if name not in candidates]
+        if not candidates:
+            raise ValueError('没有可用的图片来源：'
+                             + ('、'.join(skipped) + ' 均未配置或无输入文件；' if skipped else '')
+                             + '请在项目 .env 配置 COMFYUI_SERVER_URL / FAL_KEY / TENCENT_TOKENHUB_API_KEY / 图库密钥，'
+                               '或用 --backend file --source 导入已有图片')
+    else:
+        candidates = [args.backend]
     # Verify decoder availability before contacting an external backend.
     import PIL.Image
     with tempfile.TemporaryDirectory(prefix='.images-', dir=article) as tmp:
         staging = Path(tmp)
-        source = obtain_source(args, request, staging)
-        normalized = staging / 'result.png'
-        normalize(source, normalized, request, args.fit)
+        attempts, source, meta, used, fit = [], None, {}, None, None
+        for backend in candidates:
+            fit = args.fit or (default_fit(backend) if args.backend == 'auto' else 'exact')
+            try:
+                source, meta = obtain_backend(backend, args, request, staging)
+                normalized = staging / 'result.png'
+                normalize(source, normalized, request, fit)
+                used = backend
+                break
+            except (Exception, SystemExit) as exc:
+                if isinstance(exc, SystemExit) and exc.code == 0:
+                    raise
+                if args.backend != 'auto':
+                    raise
+                message = (f'执行中断（exit {exc.code}），详见 stderr 日志'
+                           if isinstance(exc, SystemExit) else str(exc))
+                attempts.append({'backend': backend, 'error': message})
+                print(f'[WARN] 来源 {backend} 失败，回退下一来源：{message}', file=sys.stderr)
+        if used is None:
+            detail = '\n  - '.join(f'{item["backend"]}: {item["error"]}' for item in attempts)
+            raise ValueError(f'所有图片来源均失败：\n  - {detail}')
+        if request.get('overlay'):
+            normalized = apply_overlay(normalized, request, staging)
         result = {
-            'id': request['id'], 'output': request['output'], 'backend': args.backend,
+            'id': request['id'], 'output': request['output'], 'backend': used,
             'width': request['width'], 'height': request['height'],
             'request_hash': request_hash(request), 'status': 'ready',
-            'review': 'pending', 'fit': args.fit,
+            'review': 'pending', 'fit': fit,
         }
+        for key in ('source_url', 'attribution', 'model', 'query'):
+            if meta.get(key):
+                result[key] = meta[key]
+        if attempts:
+            result['attempts'] = attempts
         report['images'] = [item for item in report['images'] if item.get('id') != args.id]
         report['images'].append(result)
         staged_report = staging / 'image-results.json'
@@ -196,11 +347,13 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description='满足一项配图需求，返回校验后的本地图片')
     parser.add_argument('article', help='含 image-requests.json 的文章目录')
     parser.add_argument('--id', required=True, help='需求清单内的图片 id')
-    parser.add_argument('--backend', choices=['comfyui', 'file', 'html', 'gemini', 'dalle'], default='comfyui')
+    parser.add_argument('--backend', choices=['auto', *image_config.BACKENDS], default='auto',
+                        help='auto 按优先级依次尝试并自动回退；也可显式指定单一来源')
     parser.add_argument('--source', help='file 方式使用的实际图片文件，可来自宿主工具、绘图软件或用户')
     parser.add_argument('--profile', help='仅用于 ComfyUI 模型档案')
     parser.add_argument('--timeout', type=int, default=600)
-    parser.add_argument('--fit', choices=['exact', 'contain', 'cover'], default='exact')
+    parser.add_argument('--fit', choices=['exact', 'contain', 'cover'], default=None,
+                        help='缺省时 auto 对图库/导入用 cover、对生图用 exact；显式后端用 exact')
     parser.add_argument('--overwrite', action='store_true')
     args = parser.parse_args(argv)
     if args.timeout <= 0:

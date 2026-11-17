@@ -1,39 +1,68 @@
-# OpenWrite 配图生成配置
+# OpenWrite 配图来源配置
 
-## 首选：本地 ComfyUI
+服务地址与 API 密钥统一配置在**项目根 `.env`**（Git 忽略，权限 600；由 `python3 openwrite.py setup` 从 `.env.example` 复制生成）。进程环境变量可覆盖 `.env` 同名值。模型档案、工作流模板、默认来源优先级与封面叠字版式在 `skills/openwrite-images/config.json`（被 Git 跟踪，不放密钥）。
 
-在本图片能力目录下执行：
+## 配置项一览
 
 ```bash
-bash scripts/check_comfyui.sh
+# ComfyUI 服务地址（含端口），本地或远程均可。
+# 多个地址用逗号分隔，本地（loopback）优先，逐个探测取第一个可达者。
+# 缺省默认 http://localhost:8188。旧键 COMFYUI_URL 仍兼容读取。
+COMFYUI_SERVER_URL=http://localhost:6677
+
+# 在线 AI 生图：fal.ai（FLUX / Recraft 等，queue API）
+# 获取：https://fal.ai/dashboard/keys ；两个键任填其一（别名关系）。
+FAL_KEY=
+FAL_AI_API_KEY=
+
+# 在线 AI 生图：腾讯混元 TokenHub（Bearer token）
+# 获取：https://console.cloud.tencent.com/tokenhub
+# 默认模型 hy-image-v3.5-preview（同步接口，支持精确 size，最高 4K）。
+TENCENT_TOKENHUB_API_KEY=
+
+# 免费图片资源站点（搜索 + 下载，结果记录署名与出处）
+PEXELS_API_KEY=        # https://www.pexels.com/api/
+PIXABAY_API_KEY=       # https://pixabay.com/api/docs/
+UNSPLASH_ACCESS_KEY=   # https://unsplash.com/developers
+```
+
+`doctor` 会列出各来源的配置状态（不显示密钥值、不联网）。未配置密钥的来源在 auto 模式下自动跳过；显式指定时报告缺少的配置项。
+
+## 本地 ComfyUI
+
+```bash
+bash scripts/check_comfyui.sh          # 探测 .env 配置的地址（多地址逐个探测）
 python3 scripts/comfyui_gen.py --prompt "封面提示词" --profile z-image --width 1024 --height 432
 ```
 
-服务地址、输出目录和模型档案见本图片能力的 `config.json`，可用 `COMFYUI_URL`、`COMFYUI_OUTPUT_DIR`、`COMFYUI_PROFILE` 覆盖。检测脚本的地址通过 `COMFYUI_URL` 指定；修改配置中的地址时请同步设置该变量。
+输出目录由 `COMFYUI_OUTPUT_DIR`（.env/环境变量）或 config.json 的 `comfyui_output_dir` 指定，必须对应本机实际可访问的 ComfyUI 输出位置。图中需要渲染汉字时使用 `z-image`，其他情况使用 `flux2`；实际目标尺寸由写作侧需求指定。
 
-图中需要渲染汉字时使用 `z-image`，其他情况使用 `flux2`。实际目标尺寸由写作侧需求指定。脚本输出 ComfyUI 图片路径；输出目录必须对应实际可访问的 ComfyUI 输出位置。将图片复制到文章目录，封面命名为 `cover.png`，不要嵌入正文。
+## 在线 AI 生图
 
-## 备选：当前 Agent 的生图能力
+- **fal.ai**：`fal` 后端走 queue API（提交 → 轮询 → 取图），默认模型 `fal-ai/flux/dev`，可在 config.json `online_models.fal` 改为 Recraft 等模型（如 `fal-ai/recraft/v3/text-to-image`）。尺寸按 32 像素对齐，最终由 produce 校验/适配到需求尺寸。
+- **腾讯混元**：`hunyuan` 后端调用 TokenHub 同步生图接口 `https://tokenhub.tencentmaas.com/v1/wand/hunyuan-image/v35-generation`，默认模型 `hy-image-v3.5-preview`（config.json `online_models.hunyuan` 可改）。需求尺寸超出模型约束时按比例缩放到合法范围生成，再适配回需求尺寸。返回的临时 URL（12 小时有效）立即下载转存。
 
-ComfyUI 不可用时，先说明情况，由用户选择手动启动服务或使用宿主已提供且已配置的生图工具。不要假设所有 Agent 都有同名工具、相同参数、免费额度或免密钥服务。
+两者都只在配置了密钥时参与 auto 回退；调用失败（限流/审核拦截等）如实报告并回退下一来源。
 
-按实际工具接口传入提示词与目标尺寸；如尺寸不支持，选择接近比例并说明。将返回图片保存到文章目录，确认文件存在后再引用。若只有 URL，按宿主允许的方式获取本地图片用于封面上传。
+## 免费图片资源站点
 
-没有可用生图能力时，提供提示词与待生成清单，明确图片未生成。
+`pexels` / `pixabay` / `unsplash` 后端按需求 `keywords` 搜索，优先选择分辨率足够且宽高比接近目标的图片下载；结果写入 `source_url`（作品页）与 `attribution`（作者署名）。Unsplash 按其 API 规范触发 download 跟踪端点。auto 模式对图库图片默认 `--fit cover`（等比裁剪到需求尺寸），验收时复查主体与构图。
 
-## 可选：直接调用第三方 API
+## 官方文档插图与宿主生图
 
-`scripts/generate_image.py` 保留 Gemini / DALL-E 直连方式，需自行配置对应后端和密钥：
+没有独立后端：由 Agent 搜索官方文档、判断插图与内容的相关性、下载原图到本地，把路径写入需求 `source_file`、原始链接写入 `source_url`（可选 `attribution`），以 `file` 方式导入。宿主 Agent 生图工具的输出同样以 `file` 导入。正文配图默认优先级中 `file` 居首，即体现"官方插图优先"。
+
+## 备用直连 API
+
+`scripts/generate_image.py` 保留 Gemini / DALL-E 直连方式，密钥 `GEMINI_API_KEY`（或 `GOOGLE_API_KEY`）、`OPENAI_API_KEY` 同样可配在 `.env`：
 
 ```bash
-export GEMINI_API_KEY="your-gemini-api-key"
-# 或配置 OPENAI_API_KEY
 python3 scripts/generate_image.py --prompt "提示词" --api gemini --output cover.png
 python3 scripts/generate_image.py --prompt "提示词" --api dalle --quality hd --size 1792x1024 --output cover.png
 ```
 
 不要将真实密钥提交到仓库。第三方 API 的模型可用性及参数以实际后端为准。
 
-## 中文文字质量
+## 封面叠字（微信）
 
-图片生成后检查中文字形与可读性。减少画面文字、缩短标题；必要时生成无字背景，再使用软件排字。
+微信封面 = 无字底图 + Pillow 精确叠字。底图来源优先级：ComfyUI > 在线生图 > 免费图库；`overlay.title` 使用已确认标题，`subtitle` 可选。版式默认值在 config.json `cover_text`（字体候选、位置、颜色、衬底、字号比例），需求 `overlay` 可逐项覆盖；`overlay.font` 可指定本机字体文件。没有可用中文字体时报错并提示配置，不静默降级。

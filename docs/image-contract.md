@@ -1,10 +1,25 @@
 # 配图交接协议
 
-本协议连接写作规则与独立图片能力。写作 Skill 负责说明要什么图和如何验收；项目流程负责提交需求、取得图片、交回验收。图片能力不修改正文，也不决定是否需要配图。
+本协议连接写作规则与独立图片能力。写作 Skill 负责说明要什么图、评估适合的来源并如何验收；项目流程负责提交需求、取得图片、交回验收。图片能力不修改正文，也不决定是否需要配图。
+
+## 来源评估与优先级
+
+图片来源分四类：本地/远程 ComfyUI、在线 AI 生图（fal.ai / 腾讯混元 TokenHub）、官方文档插图、免费图库（Pexels / Pixabay / Unsplash）。地址与密钥配置在项目根 `.env`，见 [后端配置](../skills/openwrite-images/references/api-configuration.md)。
+
+写作侧按内容评估每张图适合的来源，用 `preferred_sources` 声明偏好顺序；未声明时按默认优先级执行，`--backend auto` 逐个尝试、失败自动回退：
+
+| 场景 | 默认优先级 |
+|---|---|
+| 正文配图（与官方文档内容强相关） | 官方文档插图 > 本地 ComfyUI > 免费图库 > 在线生图 |
+| 微信封面底图 | 本地 ComfyUI > 在线生图 > 免费图库 |
+
+官方文档插图需要搜索与内容判断，由 Agent 找到并下载原图，把本地路径写入 `source_file`、原始链接写入 `source_url`，图片能力以 `file` 方式导入（默认优先级中 `file` 居首即体现官方插图优先）。图库搜索需要 `keywords`。未配置密钥的来源自动跳过，不静默计费。
+
+**微信封面为「底图 + 标题叠字」**：底图不渲染文字（`text` 置空），标题/副标题写入 `overlay`，由图片能力用 Pillow 精确排版叠加。`overlay.title` 必须是已确认的文章标题（控制器校验一致性），`subtitle` 可选。
 
 ## 配图需求：image-requests.json
 
-文件放在当前文章目录。三种写作视角共用格式，不包含后端、模型、API、凭证或服务地址。
+文件放在当前文章目录。三种写作视角共用格式，不包含模型、API、凭证或服务地址；来源偏好（`preferred_sources`）属于设计决策，可以声明。
 
 ```json
 {
@@ -19,12 +34,14 @@
       "type": "concept",
       "style": "简约科技插画",
       "palette": ["#1a1f5c", "#7c3aed", "#ffffff"],
-      "composition": "左侧标题，右侧用知识卡片与光线表达检索；留白充足",
-      "text": ["让 AI 找对资料"],
-      "prompt": "用连接知识卡片的光线表达检索增强，主题明确，避免无关机器人",
+      "composition": "右侧用知识卡片与光线表达检索；左下留白给标题叠字",
+      "text": [],
+      "prompt": "用连接知识卡片的光线表达检索增强，主题明确，避免无关机器人，画面不出现任何文字",
+      "overlay": {"title": "让 AI 找对资料", "subtitle": "检索增强实战指南", "position": "bottom-left"},
+      "preferred_sources": ["comfyui", "fal", "hunyuan", "pexels", "pixabay", "unsplash"],
       "placement": "cover-only",
       "alt": "文章封面",
-      "acceptance": ["标题清晰可读", "主题与正文一致", "画面只保留一个焦点"]
+      "acceptance": ["标题清晰可读且与确认标题一致", "主题与正文一致", "画面只保留一个焦点"]
     }
   ]
 }
@@ -41,7 +58,7 @@
 | 正文图尺寸 | 1024×768 | 1080×1440 |
 | 正文图是否必需 | 可选，可为零张 | 必需，张数由内容动态决定 |
 | 位置表达 | `placement` 匹配正文锚点 | `order` 整数（封面第 1，内容从 2 起，不重复） |
-| 常用后端 | `comfyui` / `file` | 卡片用 `html`，照片素材用 `file` |
+| 常用后端 | `comfyui` / `fal` / `hunyuan` / 图库 / `file`，封面另加 Pillow 叠字 | 卡片用 `html`，照片素材用 `file` |
 | 第六步 | 插图整合为 `article.md` | 整合文案为 `note.md`，**不嵌图** |
 | 第七步 | 排版渲染 HTML | 组装卡片顺序 + 校验 + 清单 |
 
@@ -52,7 +69,12 @@
 - `width`、`height`：目标像素尺寸。微信约定封面 1024×432、正文配图 1024×768；小红书统一 1080×1440。
 - `prompt`：图片内容与表达目的。可以是自然语言设计说明，不是后端调用参数。
 - `type`、`style`、`palette`、`composition`：画面类型、风格、配色及构图思路。
-- `text`：画面需要出现的原文列表；无文字时用空列表。
+- `text`：画面需要出现的原文列表；无文字时用空列表。微信封面使用 `overlay` 叠字时 `text` 必须为空，避免文字重复。
+- `overlay`：仅封面可用的叠字对象。`title` 必填且等于已确认标题；`subtitle` 可选；`position`（`bottom-left` 等八个方位）、`color`、`font`、`font_size`、`subtitle_size`、`scrim` 可覆盖默认版式。与 `card` 互斥。
+- `preferred_sources`：可选，来源偏好顺序（`comfyui` / `file` / `fal` / `hunyuan` / `pexels` / `pixabay` / `unsplash` / `html` / `gemini` / `dalle`），不重复；缺省按场景默认优先级。
+- `source_file`：可选，已有图片的本地路径（官方文档插图、宿主生图输出、用户图片），供 `file` 来源导入。
+- `source_url`、`attribution`：可选，图片原始出处链接与署名/版权信息，随结果保留以便溯源。
+- `keywords`：可选但图库来源必需，搜索关键词字符串列表。
 - `acceptance`：可检查的设计与内容要求；数据图必须与正文的真实数据一致。
 
 执行器校验标识、文件名、尺寸和字段格式。配图的主题、色调、构图、文字、数据与插入位置由写作侧补全并验收，不由执行器猜测。
@@ -68,19 +90,23 @@
     {
       "id": "cover",
       "output": "cover.png",
-      "backend": "file",
+      "backend": "comfyui",
       "width": 1024,
       "height": 432,
       "request_hash": "实际需求内容的 SHA-256",
       "status": "ready",
       "review": "pending",
-      "fit": "exact"
+      "fit": "exact",
+      "model": "flux2",
+      "source_url": "https://docs.example.com/figure.png",
+      "attribution": "Example Official Docs",
+      "attempts": [{"backend": "comfyui", "error": "…"}]
     }
   ]
 }
 ```
 
-`ready` 只表示实际文件已取得且通过格式与尺寸校验，**不代表视觉验收通过**。写作侧仍需查看图片，核对文字、事实、色调、构图和正文相关性；实际查看图片后，通过项目工作流的 `complete --reviewed --note` 提交验收，控制器将图片及需求指纹与该阶段验收关联；细节也可补充到 `brief.md`。
+`backend` 记录实际取得图片的来源；`source_url` / `attribution` / `model` / `query` 为可选溯源信息（官方插图出处、图库署名、生图模型等）；auto 回退时 `attempts` 记录此前失败的来源与原因。`ready` 只表示实际文件已取得且通过格式与尺寸校验，**不代表视觉验收通过**。写作侧仍需查看图片，核对文字、事实、色调、构图和正文相关性；实际查看图片后，通过项目工作流的 `complete --reviewed --note` 提交验收，控制器将图片及需求指纹与该阶段验收关联；细节也可补充到 `brief.md`。
 
 需求发生变化后，之前的验收不再自动有效。项目流程需对照需求指纹及实际文件重新检查、取得或验收图片。不要仅凭文件名或旧的 `ready` 状态认定当前需求已完成。
 

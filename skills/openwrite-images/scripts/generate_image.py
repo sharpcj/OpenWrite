@@ -16,9 +16,21 @@ import os
 import sys
 import argparse
 import base64
+import importlib.util
 import requests
 from pathlib import Path
 from typing import Optional, Dict, Any
+
+
+def _load_sibling(name: str):
+    spec = importlib.util.spec_from_file_location(
+        name, os.path.join(os.path.dirname(os.path.abspath(__file__)), f'{name}.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+image_config = _load_sibling('image_config')
 
 
 class ImageGenerator:
@@ -61,9 +73,9 @@ class GeminiImageGenerator(ImageGenerator):
     """Gemini Imagen API图片生成器 - 使用 Google Genai SDK"""
 
     def _get_api_key(self) -> str:
-        api_key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
+        api_key = image_config.setting('GEMINI_API_KEY') or image_config.setting('GOOGLE_API_KEY')
         if not api_key:
-            raise ValueError("请设置环境变量 GEMINI_API_KEY 或 GOOGLE_API_KEY")
+            raise ValueError("请在项目 .env 或环境变量设置 GEMINI_API_KEY 或 GOOGLE_API_KEY")
         return api_key
 
     def generate(self, prompt: str, output_path: str, **kwargs) -> str:
@@ -109,9 +121,9 @@ class DALLEImageGenerator(ImageGenerator):
     """DALL-E API图片生成器 (OpenAI)"""
     
     def _get_api_key(self) -> str:
-        api_key = os.environ.get('OPENAI_API_KEY')
+        api_key = image_config.setting('OPENAI_API_KEY')
         if not api_key:
-            raise ValueError("请设置环境变量 OPENAI_API_KEY")
+            raise ValueError("请在项目 .env 或环境变量设置 OPENAI_API_KEY")
         return api_key
     
     def generate(self, prompt: str, output_path: str, **kwargs) -> str:

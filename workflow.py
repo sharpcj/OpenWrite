@@ -343,6 +343,9 @@ def proof(article: Path, step: str) -> str:
                        'outline': plan['outline_hash'], 'title': plan['chosen_title'], **extra})
     if step == 'cover':
         cover = next(item for item in requests(article) if item['role'] == 'cover')
+        overlay = cover.get('overlay')
+        if overlay and overlay.get('title') != load(article)['title']:
+            raise ValueError('封面 overlay.title 必须与已确认的文章标题一致；换标题请先更新 outline 并重新确认')
         return digest(image_proof(article, cover))
     if step == 'content':
         images = requests(article)

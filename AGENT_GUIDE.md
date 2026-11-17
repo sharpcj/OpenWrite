@@ -80,7 +80,7 @@ python3 openwrite.py publish articles/my-topic --title "文章标题"
 
 默认排版器会对全文进行中英文间距和引号预处理，包括代码示例。需要保留原文时用 `format --no-preformat`。项目入口自动执行微信代码块兼容转换。
 
-微信凭证放在项目本地 `.env`：运行 `python3 openwrite.py setup` 从 `.env.example` 复制生成（不覆盖已有文件，权限 600，已被 Git 忽略），再填写 `WeChatAppID`、`WeChatAppSecret`，可选 `WeChatAuthor`。发布器不再读取 `~/.wechat-publisher/config.json`；access_token 缓存仍在 `~/.wechat-publisher/token_cache.json`。图片后端集中配置在 `skills/openwrite-images/`，写作 Skill 只通过 `image-requests.json` 提交设计需求。不要将真实密钥写入 `.env.example` 或加入版本控制，也不代用户填写凭证。
+微信凭证放在项目本地 `.env`：运行 `python3 openwrite.py setup` 从 `.env.example` 复制生成（不覆盖已有文件，权限 600，已被 Git 忽略），再填写 `WeChatAppID`、`WeChatAppSecret`，可选 `WeChatAuthor`。发布器不再读取 `~/.wechat-publisher/config.json`；access_token 缓存仍在 `~/.wechat-publisher/token_cache.json`。配图的服务地址与密钥同样在 `.env`（`COMFYUI_SERVER_URL`、`FAL_KEY`/`FAL_AI_API_KEY`、`TENCENT_TOKENHUB_API_KEY`、`PEXELS_API_KEY`、`PIXABAY_API_KEY`、`UNSPLASH_ACCESS_KEY`），模型档案与来源优先级等规则在 `skills/openwrite-images/config.json`；写作 Skill 只通过 `image-requests.json` 提交设计需求与来源偏好。不要将真实密钥写入 `.env.example` 或加入版本控制，也不代用户填写凭证。
 
 ## English
 

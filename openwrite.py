@@ -207,7 +207,9 @@ def image_article(args: argparse.Namespace) -> int:
     directory = article_directory(args.article)
     workflow.require_image_stage(directory, args.id)
     arguments = [str(directory), '--id', args.id, '--backend', args.backend,
-                 '--fit', args.fit, '--timeout', str(args.timeout)]
+                 '--timeout', str(args.timeout)]
+    if args.fit:
+        arguments.extend(['--fit', args.fit])
     if args.source:
         arguments.extend(['--source', str(Path(args.source).expanduser().resolve())])
     if args.profile:
@@ -337,6 +339,16 @@ def doctor(args: argparse.Namespace) -> int:
     for label, passed in checks:
         print(f'{"OK" if passed else "MISSING"}  {label}')
     print('仅检查本地环境；未连接 ComfyUI 或微信，也未读取微信凭证。')
+    values = preferences.read_values(ROOT)
+    comfy = values.get('COMFYUI_SERVER_URL', '').strip() or 'http://localhost:8188（默认）'
+    print(f'配图来源（.env）：ComfyUI {comfy}')
+    for label, keys in (('fal.ai', ('FAL_KEY', 'FAL_AI_API_KEY')),
+                        ('腾讯混元 TokenHub', ('TENCENT_TOKENHUB_API_KEY',)),
+                        ('Pexels', ('PEXELS_API_KEY',)),
+                        ('Pixabay', ('PIXABAY_API_KEY',)),
+                        ('Unsplash', ('UNSPLASH_ACCESS_KEY',))):
+        configured = any(values.get(key, '').strip() for key in keys)
+        print(f'  {"已配置" if configured else "未配置"}  {label}')
     planned = [profile['label'] for profile in platforms.REGISTRY.values() if not profile['implemented']]
     if planned:
         print(f'平台适配器尚未实现：{"、".join(planned)}（可选择并记录，不能推进创作流程）。')
@@ -406,11 +418,15 @@ def main(argv: list[str] | None = None) -> int:
     image = commands.add_parser('image', help='执行独立图片能力，满足一项配图需求')
     image.add_argument('article', help='含 image-requests.json 的文章目录')
     image.add_argument('--id', required=True)
-    image.add_argument('--backend', choices=['comfyui', 'file', 'html', 'gemini', 'dalle'], default='comfyui')
+    image.add_argument('--backend',
+                       choices=['auto', 'comfyui', 'file', 'html', 'gemini', 'dalle',
+                                'fal', 'hunyuan', 'pexels', 'pixabay', 'unsplash'],
+                       default='auto', help='auto 按配置优先级尝试多来源并自动回退')
     image.add_argument('--source', help='已有图片或宿主工具输出文件')
     image.add_argument('--profile', help='ComfyUI 模型档案')
     image.add_argument('--timeout', type=int, default=600)
-    image.add_argument('--fit', choices=['exact', 'contain', 'cover'], default='exact')
+    image.add_argument('--fit', choices=['exact', 'contain', 'cover'], default=None,
+                       help='缺省时 auto 对图库/导入用 cover、对生图用 exact')
     image.add_argument('--overwrite', action='store_true')
     image.set_defaults(action=image_article)
     publish = commands.add_parser('publish', help='将指定文章上传到微信草稿箱（会调用微信 API）')
