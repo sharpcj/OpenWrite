@@ -93,7 +93,12 @@ def _layout(overlay: dict, width: int, height: int):
     from PIL import ImageFont
     defaults = image_config.cover_text_defaults()
     margin = max(8, int(min(width, height) * float(defaults['margin_ratio'])))
+    ratio = overlay.get('text_width_ratio')
+    if ratio is not None and (type(ratio) not in (int, float) or not 0.1 <= ratio <= 0.9):
+        raise ValueError('text_width_ratio 必须为 0.1–0.9 的数字')
     max_width = width - 2 * margin
+    if ratio is not None:
+        max_width = min(max_width, int(width * ratio))
     available = height - 2 * margin
     title = overlay['title']
     subtitle = overlay.get('subtitle') or ''

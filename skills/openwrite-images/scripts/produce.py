@@ -56,8 +56,50 @@ def _validate_overlay(item: dict) -> None:
     for key in ('font_size', 'subtitle_size'):
         if key in overlay and (type(overlay[key]) is not int or not 8 <= overlay[key] <= 512):
             raise ValueError(f'overlay.{key} 必须为 8–512 的整数')
+    if 'text_width_ratio' in overlay and (type(overlay['text_width_ratio']) not in (int, float)
+                                            or not 0.1 <= overlay['text_width_ratio'] <= 0.9):
+        raise ValueError('overlay.text_width_ratio 必须为 0.1–0.9 的数字')
     if 'scrim' in overlay and type(overlay['scrim']) is not bool:
         raise ValueError('overlay.scrim 必须是布尔值')
+
+
+def _cover_requirement(article: Path, request: dict) -> dict:
+    """Use task snapshots, never mutable .env defaults, to resolve cover design."""
+    state_file = article / 'workflow.json'
+    if request.get('role') != 'cover' or not state_file.is_file():
+        return request
+    state = json.loads(state_file.read_text(encoding='utf-8'))
+    if state.get('platform', 'wechat') != 'wechat' or not state.get('cover_style'):
+        return request
+    style = state['cover_style']
+    if (not isinstance(style, dict) or set(style) - {'layout', 'visual_style', 'color_tone'}
+            or not all(isinstance(v, str) and v.strip() for v in style.values())):
+        raise ValueError('任务 cover_style 格式不正确')
+    import copy
+    result = copy.deepcopy(request)
+    result['cover_style'] = dict(style)
+    if style.get('visual_style'):
+        result['style'] = style['visual_style']
+    if style.get('color_tone'):
+        result['palette'] = [style['color_tone']]
+    if style.get('layout'):
+        layout = style['layout']
+        instructions = layout
+        if layout in ('左文右图', 'left-text-right-image'):
+            instructions += ('; one continuous unified background across the full image, '
+                             'main subject confined to the right 45%, keep the left 50% quiet and uncluttered '
+                             'for text, no hard split or separate text panel, no text rendered in the base image')
+            if result.get('text'):
+                raise ValueError('左文右图封面采用后期叠字，请将 text 置空并提供 overlay 标题')
+            overlay = result.setdefault('overlay', {'title': state.get('title', '')})
+            if overlay.get('position') not in ('top-left', 'center-left', 'bottom-left'):
+                overlay['position'] = 'center-left'
+            overlay['text_width_ratio'] = min(overlay.get('text_width_ratio', 0.45), 0.45)
+            overlay.setdefault('scrim', False)
+        result['composition'] = '\n'.join(v for v in (result.get('composition', ''), instructions) if v)
+    if result.get('overlay'):
+        _validate_overlay(result)
+    return result
 
 
 def load_request(article: Path, request_id: str) -> dict:
@@ -136,7 +178,7 @@ def load_request(article: Path, request_id: str) -> dict:
             selected = item
     if selected is None:
         raise ValueError(f'找不到图片需求：{request_id}')
-    return selected
+    return _cover_requirement(article, selected)
 
 
 def request_hash(request: dict) -> str:

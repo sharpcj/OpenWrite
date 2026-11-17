@@ -14,6 +14,12 @@ OpenWrite 是一个微信公众号创作工作区。用户在项目中提出写�
 
 平台差异由根目录 `platforms.py` 的注册表表达（产物形态、尺寸、张数、上限、渲染与发布 Skill），控制器与命令入口只查表，不散落平台判断。`implemented` 管写作到可发布产物，`publish_implemented` 管上传，两者独立。接入方式与路线见 [平台适配器契约](docs/platforms.md)。
 
+## 微信封面样式
+
+在本地 `.env` 中通过 `WeChatCoverLayout`、`WeChatCoverVisualStyle`、`WeChatCoverColorTone` 分别配置版式、视觉风格和色调，可填写自定义描述。单次明确选择用 `--cover-layout`、`--cover-visual-style`、`--cover-color-tone` 覆盖，未明确指定的维度不要擅自传参。`new` / `workflow init` 保存任务快照，继续任务以快照为准。
+
+封面设计前查看快照，未确定的维度有歧义时请用户选择；修改当前任务用 `workflow cover-style`，已完成封面须先退回 cover。左文右图采用统一背景、主体靠右、左侧安静留白和程序叠字，不与主体重叠；字色需与背景协调。写作只约束设计，执行由独立图片能力负责。详见 [封面样式](docs/cover-style.md)。
+
 ## 技能路由
 
 优先读取任务状态中的平台与视角，再按当前阶段读取 Skill，不预先加载整个技能库。

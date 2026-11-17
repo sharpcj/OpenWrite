@@ -73,3 +73,7 @@ python3 openwrite.py image articles/my-topic --id cover --backend file --source 
 需要图中渲染中文时优先 `z-image`，否则使用 `flux2`。可通过 `--profile` 显式覆盖；默认规则来自配置。需求执行入口仅用 `text` 字段判断画面是否要渲染中文，不把中文构图说明误当作画面文字。模型与工作流细节只在本能力维护，见 [模型档案指南](references/comfyui-profiles.md) 和 [后端配置](references/api-configuration.md)。
 
 缺少可用来源、实际文件不可读、尺寸不符或图片损坏时报告失败；不生成占位图片来假装完成。
+
+## 微信封面三维样式
+
+微信任务可保存 `cover_style`，分别指定版式、视觉风格和色调。执行器只读取任务快照，统一解析为有效需求及其指纹；不重新读取全局样式改变已有任务。左文右图同时约束底图构图与实际文字排版区域，文字不扩展到右侧主体区域，底图主体位置仍需看图验收。配置、任务覆盖与自定义方式见 [封面样式](../../docs/cover-style.md)。

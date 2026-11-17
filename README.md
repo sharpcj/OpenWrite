@@ -186,6 +186,18 @@ python3 openwrite.py workflow reset articles/rag-guide --from draft
 
 完整文件协议与示例见 [七步工作流](docs/workflow.md)。主题支持 `default`、`grace`、`modern`、`simple`。可用 `python3 openwrite.py --help` 查看命令。
 
+## 微信封面图样式
+
+三个维度可在本地 `.env` 独立配置或自定义：
+
+```dotenv
+WeChatCoverLayout="左文右图"
+WeChatCoverVisualStyle="温暖插画"
+WeChatCoverColorTone="暖黄奶油色"
+```
+
+单次创作可使用 `--cover-layout`、`--cover-visual-style`、`--cover-color-tone` 覆盖；选择保存在任务中，不随全局配置变化。左文右图使用贯通背景、右侧主体与左侧限定文字区。已有 `.env` 不会被自动改写，需要自行添加上述配置。详见 [封面样式配置](docs/cover-style.md)。
+
 ## 配图与发布配置
 
 写作 Skill 定义“配什么图”，独立的 [openwrite-images](skills/openwrite-images/SKILL.md) 负责“图片怎么来”。两者通过 [配图交接协议](docs/image-contract.md) 协作，写作 Skill 不感知后端配置、模型与 API 参数。

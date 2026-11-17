@@ -29,10 +29,13 @@ XHS_CREDENTIALS = {'XhsCreatorCookie': 'cookie'}
 # Single-valued writer role; the legacy boolean perspective switches are rejected.
 WRITER_ROLE_KEY = 'WriterRole'
 DEFAULT_WRITER_ROLE = 'SelfMediaBlogger'
+WECHAT_COVER_KEYS = {'WeChatCoverLayout': 'layout',
+                     'WeChatCoverVisualStyle': 'visual_style',
+                     'WeChatCoverColorTone': 'color_tone'}
 # Image-source addresses and keys; consumed by skills/openwrite-images.
 IMAGE_KEYS = {'COMFYUI_SERVER_URL', 'FAL_KEY', 'FAL_AI_API_KEY', 'TENCENT_TOKENHUB_API_KEY',
               'PEXELS_API_KEY', 'PIXABAY_API_KEY', 'UNSPLASH_ACCESS_KEY'}
-KNOWN_KEYS = set(PLATFORMS) | {WRITER_ROLE_KEY} | set(CREDENTIALS) | set(XHS_CREDENTIALS) | IMAGE_KEYS
+KNOWN_KEYS = set(WECHAT_COVER_KEYS) | set(PLATFORMS) | {WRITER_ROLE_KEY} | set(CREDENTIALS) | set(XHS_CREDENTIALS) | IMAGE_KEYS
 PLACEHOLDERS = {'', 'your_appid', 'your_appid_here', 'your_appsecret', 'your_appsecret_here',
                 'your_author', 'your_author_here', 'changeme',
                 'your_cookie', 'your_cookie_here', 'your_xhs_cookie_here'}
@@ -104,6 +107,30 @@ def writer_role(root: Path) -> tuple:
         if raw.casefold() == label.casefold():
             return perspective, 'config'
     raise ValueError(f'{ENV_NAME} 中的 {WRITER_ROLE_KEY} 只能为 {" / ".join(PERSPECTIVES)}（当前：{raw}）')
+
+
+def validate_cover_style(value: dict) -> dict:
+    if not isinstance(value, dict) or set(value) - set(WECHAT_COVER_KEYS.values()):
+        raise ValueError('封面样式仅包含 layout、visual_style、color_tone 三个维度')
+    normalized = {}
+    for key, text in value.items():
+        if not isinstance(text, str) or not text.strip() or len(text) > 300 or '\n' in text or '\r' in text:
+            raise ValueError(f'封面样式 {key} 必须为非空单行描述（不超过 300 字）')
+        normalized[key] = text.strip()
+    return normalized
+
+
+def cover_style(root: Path, layout=None, visual_style=None, color_tone=None) -> dict:
+    values = read_values(root)
+    supplied = dict(layout=layout, visual_style=visual_style, color_tone=color_tone)
+    chosen = {}
+    for env_key, dimension in WECHAT_COVER_KEYS.items():
+        explicit = supplied[dimension]
+        if explicit is not None:
+            chosen[dimension] = explicit
+        elif values.get(env_key, '').strip():
+            chosen[dimension] = values[env_key]
+    return validate_cover_style(chosen)
 
 
 def feature_flags(root: Path) -> dict:

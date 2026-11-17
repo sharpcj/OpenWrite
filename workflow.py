@@ -61,7 +61,7 @@ def read_json(path: Path) -> dict:
 
 def initialize(article: Path, title: str = '', perspective: str = 'tech',
                platform: str = platforms.WECHAT, selection_source=None,
-               outline_approval: bool = True) -> dict:
+               outline_approval: bool = True, cover_style=None) -> dict:
     path = article / 'workflow.json'
     if path.exists():
         raise ValueError('workflow.json 已存在；继续任务请查看 status，重做请使用 reset')
@@ -72,6 +72,8 @@ def initialize(article: Path, title: str = '', perspective: str = 'tech',
              'selection_source': selection_source or {},
              'outline_approval': bool(outline_approval), 'revision': 0, 'completed': [],
              'created_at': datetime.now().astimezone().isoformat(timespec='seconds')}
+    if platform == platforms.WECHAT and cover_style:
+        state['cover_style'] = preferences.validate_cover_style(cover_style)
     write_json(path, state)
     return state
 
@@ -84,6 +86,8 @@ def load(article: Path) -> dict:
     if (state.get('version') != 1 or not isinstance(records, list)
             or len(records) > len(STEPS) or type(state.get('revision')) is not int):
         raise ValueError('workflow.json 格式不正确')
+    if 'cover_style' in state:
+        preferences.validate_cover_style(state['cover_style'])
     if 'outline_approval' in state and type(state['outline_approval']) is not bool:
         raise ValueError('workflow.json 的 outline_approval 必须是布尔值')
     for index, record in enumerate(records):
@@ -210,7 +214,7 @@ def requests(article: Path) -> list:
             orders.append(order)
         if len(set(orders)) != len(orders):
             raise ValueError('组图卡片的 order 不可重复')
-    return images
+    return [runtime.load_request(article, item['id']) for item in images]
 
 
 def card_order(article: Path) -> list:

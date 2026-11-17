@@ -134,3 +134,9 @@ Explicit user choices, passed by the agent as `--platform wechat|rednote` and `-
 Run `python3 openwrite.py preferences` to inspect the resolved defaults. Task choices are persisted in `workflow.json`; changing the defaults does not change existing work. Rednote is fully implemented (writing, card artifacts, and publishing); publishing defaults to private visibility and requires an explicit `--public` for public notes. See [selection rules](docs/task-selection.md).
 
 Platform differences live in the `platforms.py` registry (artifact shape, dimensions, image counts, limits, renderer and publisher skills); the controller and command entry only read that table. `implemented` covers writing through the publishable artifact, `publish_implemented` covers uploading; the two are independent. See the [platform adapter contract](docs/platforms.md) for the onboarding checklist and phased roadmap.
+
+## WeChat cover design
+
+Configure layout, visual style and color tone independently in the local `.env` through `WeChatCoverLayout`, `WeChatCoverVisualStyle` and `WeChatCoverColorTone`. They accept custom descriptions. Per-task `--cover-layout`, `--cover-visual-style` and `--cover-color-tone` override only their respective dimensions; `new` and `workflow init` persist a snapshot.
+
+The left-text/right-image layout keeps a continuous background, reserves the right side for the subject and constrains typeset text to the left. Current tasks can use `workflow cover-style` before completing the cover stage; completed covers require resetting first. Existing tasks without snapshots keep their original behavior. See [cover design](docs/cover-style.md).

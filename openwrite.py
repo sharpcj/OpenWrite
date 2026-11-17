@@ -49,6 +49,7 @@ def new_article(args: argparse.Namespace) -> int:
         raise ValueError('文章标题不能包含换行')
     selection = preferences.resolve(ROOT, getattr(args, 'platform', None),
                                     getattr(args, 'perspective', None) or getattr(args, 'type', None))
+    cover = task_cover_style(args, selection['platform'])
     directory = ROOT / 'articles' / args.name
     directory.mkdir(parents=True, exist_ok=False)
     perspective = preferences.PERSPECTIVE_LABELS[selection['perspective']]
@@ -65,9 +66,11 @@ def new_article(args: argparse.Namespace) -> int:
     (directory / 'analysis.md').write_text('# 资料分析\n', encoding='utf-8')
     workflow.write_json(directory / 'sources.json', {'version': 1, 'sources': []})
     workflow.initialize(directory, title, selection['perspective'], selection['platform'],
-                        selection['selection_source'], checkpoint)
+                        selection['selection_source'], checkpoint, cover)
     print(f'已创建文章工作区：{directory}')
     print(f'本次任务：{platform_label} / {perspective}')
+    if cover:
+        print('封面样式：' + json.dumps(cover, ensure_ascii=False))
     print(f'标题与大纲检查点：{"开启，写正文前需用户确认" if checkpoint else "已授权跳过"}')
     profile = platforms.spec(selection['platform'])
     if not profile['implemented']:
@@ -76,6 +79,22 @@ def new_article(args: argparse.Namespace) -> int:
         print(f'{profile["label"]}选择已保存；创作流程可推进，上传适配器尚未实现，完成后需手动发布。')
     print('已创建需求、来源清单、分析与正文草稿及 workflow.json；当前步骤：search。')
     return 0
+
+
+def task_cover_style(args: argparse.Namespace, platform: str) -> dict:
+    fields = ('cover_layout', 'cover_visual_style', 'cover_color_tone')
+    supplied = [getattr(args, name, None) for name in fields]
+    if platform != platforms.WECHAT:
+        if any(value is not None for value in supplied):
+            raise ValueError('WeChatCover 三个配置维度目前仅用于微信封面')
+        return {}
+    return preferences.cover_style(ROOT, *supplied)
+
+
+def add_cover_arguments(command):
+    command.add_argument('--cover-layout', help='本次微信封面版式，覆盖 WeChatCoverLayout')
+    command.add_argument('--cover-visual-style', help='本次封面视觉风格，覆盖 WeChatCoverVisualStyle')
+    command.add_argument('--cover-color-tone', help='本次封面色调，覆盖 WeChatCoverColorTone')
 
 
 def outline_checkpoint(args: argparse.Namespace) -> bool:
@@ -223,9 +242,24 @@ def workflow_command(args: argparse.Namespace) -> int:
     directory = article_directory(args.article)
     if args.operation == 'init':
         selection = preferences.resolve(ROOT, args.platform, args.perspective or args.type)
+        cover = task_cover_style(args, selection['platform'])
         workflow.initialize(directory, args.title or directory.name, selection['perspective'],
                             selection['platform'], selection['selection_source'],
-                            outline_checkpoint(args))
+                            outline_checkpoint(args), cover)
+    elif args.operation == 'cover-style':
+        state = workflow.load(directory)
+        if preferences.task_platform(state) != platforms.WECHAT:
+            raise ValueError('此封面样式命令目前仅用于微信任务')
+        if len(state['completed']) > workflow.STEPS.index('cover'):
+            raise ValueError('封面阶段已完成，请先 workflow reset <目录> --from cover')
+        changes = {key: getattr(args, 'cover_' + key, None) for key in ('layout', 'visual_style', 'color_tone')}
+        if not any(value is not None for value in changes.values()):
+            raise ValueError('请指定至少一个 --cover-layout / --cover-visual-style / --cover-color-tone')
+        updated = dict(state.get('cover_style', {}))
+        updated.update({key: value for key, value in changes.items() if value is not None})
+        state['cover_style'] = preferences.validate_cover_style(updated)
+        state['revision'] += 1
+        workflow.write_json(directory / 'workflow.json', state)
     elif args.operation == 'complete':
         workflow.complete(directory, args.step, args.reviewed, args.note or '')
     elif args.operation == 'reset':
@@ -237,6 +271,8 @@ def workflow_command(args: argparse.Namespace) -> int:
     perspective = preferences.task_perspective(state)
     print(f'任务平台：{preferences.PLATFORM_LABELS.get(platform, platform)}；写作视角：{preferences.PERSPECTIVE_LABELS.get(perspective, perspective)}')
     print(f'标题与大纲检查点：{"开启" if workflow.outline_required(state) else "已授权跳过"}')
+    if state.get('cover_style'):
+        print('封面样式：' + json.dumps(state['cover_style'], ensure_ascii=False))
     profile = platforms.for_state(state)
     if profile['implemented']:
         try:
@@ -292,6 +328,8 @@ def setup_command(args: argparse.Namespace) -> int:
 
 def preference_command(args: argparse.Namespace) -> int:
     selection = preferences.resolve(ROOT, args.platform, args.perspective)
+    if selection['platform'] == platforms.WECHAT:
+        selection['cover_style'] = preferences.cover_style(ROOT)
     print(json.dumps(selection, ensure_ascii=False, indent=2))
     print(f'OutlineApproval（标题与大纲确认检查点）：{preferences.outline_approval(ROOT)}')
     profile = platforms.spec(selection['platform'])
@@ -378,13 +416,16 @@ def main(argv: list[str] | None = None) -> int:
     views.add_argument('--perspective', choices=tuple(preferences.PERSPECTIVE_LABELS), default=None)
     views.add_argument('--type', choices=['tech', 'product'], default=None, help='旧版视角参数，兼容 --perspective')
     new.add_argument('--skip-outline', action='store_true', help='用户授权跳过标题与大纲确认检查点')
+    add_cover_arguments(new)
     new.set_defaults(action=new_article)
     flow = commands.add_parser('workflow', help='查看、推进或退回七步创作流程')
     operations = flow.add_subparsers(dest='operation', required=True)
-    for operation in ('init', 'status', 'complete', 'reset', 'finalize'):
+    for operation in ('init', 'status', 'complete', 'reset', 'finalize', 'cover-style'):
         command = operations.add_parser(operation)
         command.add_argument('article', help='文章目录')
         command.set_defaults(action=workflow_command)
+        if operation in ('init', 'cover-style'):
+            add_cover_arguments(command)
         if operation == 'init':
             command.add_argument('--title')
             command.add_argument('--platform', choices=tuple(platforms.REGISTRY), default=None)
