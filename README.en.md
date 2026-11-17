@@ -78,7 +78,7 @@ python3 openwrite.py format articles/rag-guide --no-preformat
 python3 openwrite.py publish articles/rag-guide
 ```
 
-`doctor` performs local checks only. `new` creates a brief, source list, analysis and draft stubs, and `workflow.json`; it does not create final Markdown. The agent writes the article using the selected skill and submits completed artifacts through the workflow. Existing article directories are not overwritten. `format` is the seventh stage: it runs the formatter and code-block converter, checks publishability, writes `publish-manifest.json`, and preserves existing HTML on failure. Themes: `default`, `grace`, `modern`, `simple`.
+`doctor` performs local checks only. `new` creates a brief, source list, analysis and draft stubs, and `workflow.json`; it does not create final Markdown. The agent writes the article using the selected skill and submits completed artifacts through the workflow. Existing article directories are not overwritten. `format` is the seventh stage: it runs the formatter and code-block converter, checks publishability, writes `publish-manifest.json`, and preserves existing HTML on failure. WeChat body themes: `default`, `grace`, `modern` (warm orange), `simple`, `blueprint-tech` (blue headings, teal quotes and striped tables). Select one through the existing `format --theme blueprint-tech` option; add `--no-preformat` when changing only the theme. These themes do not change covers or Rednote cards.
 
 ## Article workspace
 

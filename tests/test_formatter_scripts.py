@@ -1,5 +1,6 @@
 """Formatter debt cleanup: shared convert function, batch CLI and polling preview."""
 import importlib.util
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -28,6 +29,49 @@ SAMPLE = '# 标题\n\n这是一个测试段落，包含English words。\n\n## �
 
 
 class ConvertFunctionTests(unittest.TestCase):
+    def test_all_builtin_themes_are_discovered_and_render(self):
+        names = {theme['name'] for theme in core._list_themes()}
+        for name in ('default', 'grace', 'modern', 'simple', 'blueprint-tech'):
+            with self.subTest(theme=name):
+                self.assertIn(name, names)
+                html = core.convert_markdown(SAMPLE, name, preformat=False)
+                self.assertIn('小节', html)
+                self.assertNotRegex(html, r'\{[a-z][a-z-]*\}')
+
+    def test_blueprint_uses_consistent_heading_quote_and_table_styles(self):
+        text = ('# 全文标题\n\n# 第一节\n\n> 推荐做法。\n\n'
+                '# 第二节\n\n> 正向案例。\n\n'
+                '| 项目 | 说明 |\n| --- | --- |\n'
+                '| 甲 | 一 |\n| 乙 | 二 |\n| 丙 | 三 |\n')
+        html = core.convert_markdown(text, 'blueprint-tech', preformat=False)
+        headings = re.findall(r'<h1 style="([^"]+)"', html)
+        quotes = re.findall(r'<blockquote style="([^"]+)"', html)
+        headers = re.findall(r'<th style="([^"]+)"', html)
+        self.assertEqual(len(headings), 2)
+        self.assertEqual(len(set(headings)), 1)
+        self.assertIn('background:#667eea;', headings[0])
+        self.assertNotIn('gradient', headings[0])
+        self.assertEqual(len(quotes), 2)
+        self.assertEqual(len(set(quotes)), 1)
+        self.assertIn('border-left:4px solid #2e8b8b;', quotes[0])
+        self.assertEqual(len(headers), 2)
+        self.assertEqual(len(set(headers)), 1)
+        self.assertIn('background:#667eea;', headers[0])
+        self.assertEqual(re.findall(r'<tr(?: style="([^"]*)")?>', html),
+                         ['', 'background:#ffffff;', 'background:#f8f9ff;', 'background:#ffffff;'])
+        self.assertNotIn('#f5576c', html)
+
+    def test_table_row_styles_are_optional_and_support_header(self):
+        text = '| 项目 |\n| --- |\n| 甲 |\n| 乙 |\n'
+        for name in ('default', 'grace', 'modern', 'simple'):
+            with self.subTest(theme=name):
+                html = core.convert_markdown(text, name, preformat=False)
+                self.assertEqual(html.count('<tr>'), 3)
+                self.assertNotIn('<tr style=', html)
+        styles = core._build_styles({'styles': {'tr-head': 'background:#123456;'}})
+        html = core._md_to_html(text, styles)
+        self.assertIn('<tr style="background:#123456;">', html)
+
     def test_convert_markdown_applies_theme_and_removes_h1(self):
         html = core.convert_markdown(SAMPLE, 'default')
         self.assertIn('<section', html)

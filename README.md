@@ -61,7 +61,7 @@ OpenWrite/
 | [wechat-tech-writer](skills/wechat-tech-writer/SKILL.md) | 技术科普、工具介绍；封面必需，正文配图按需 |
 | [wechat-product-manager-writer](skills/wechat-product-manager-writer/SKILL.md) | 产品视角、真实场景；封面必需，正文配图按需 |
 | [rednote-note-writer](skills/rednote-note-writer/SKILL.md) | 小红书图文：钩子标题、短文案、话题、3:4 组图卡片稿 |
-| [wechat-article-formatter](skills/wechat-article-formatter/SKILL.md) | Markdown 转公众号 HTML，四套 YAML 主题 |
+| [wechat-article-formatter](skills/wechat-article-formatter/SKILL.md) | Markdown 转公众号 HTML，五套 YAML 主题（含暖橙、蓝图科技） |
 | [openwrite-images](skills/openwrite-images/SKILL.md) | 接收配图需求，获取、校验并保存图片；集中管理后端，含卡片 `html` 渲染 |
 | [wechat-draft-publisher](skills/wechat-draft-publisher/SKILL.md) | 上传封面、正文图片和微信草稿 |
 | [rednote-publisher](skills/rednote-publisher/SKILL.md) | 发布小红书笔记：默认仅自己可见，公开需显式授权，支持 dry-run 预演 |
@@ -184,7 +184,7 @@ python3 openwrite.py workflow reset articles/rag-guide --from draft
 
 退回保留文件，清除该阶段及下游状态。内容指纹会检测已完成产物是否变化，防止沿用过期配图或排版；更换 Agent 后通过 `status` 继续。现有文章可用 `workflow init <目录>` 初始化，再按步骤提交已有产物。只换主题重排版时 `reset --from format` 即可；产物在用户确认后被修改，需重新排版并重新确认发布。
 
-完整文件协议与示例见 [七步工作流](docs/workflow.md)。主题支持 `default`、`grace`、`modern`、`simple`。可用 `python3 openwrite.py --help` 查看命令。
+完整文件协议与示例见 [七步工作流](docs/workflow.md)。微信正文主题支持 `default`（经典蓝）、`grace`（优雅紫）、`modern`（暖橙）、`simple`（极简黑）、`blueprint-tech`（蓝图科技），通过现有入口 `python3 openwrite.py format articles/rag-guide --theme blueprint-tech` 选择。只换主题、不做文字预格式化时追加 `--no-preformat`；主题不改变封面样式或小红书卡片。可用 `python3 openwrite.py --help` 查看命令。
 
 ## 微信封面图样式
 

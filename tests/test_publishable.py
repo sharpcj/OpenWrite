@@ -34,6 +34,34 @@ class PublishableTests(unittest.TestCase):
                 cli.format_article(Namespace(article=str(self.article), theme='default', no_preformat=True))
             execute.assert_not_called()
 
+    def test_builtin_themes_format_and_reflow_through_project_entry(self):
+        finish_article(self.article, text=(
+            '# 测试文章\n\n# 正文章节\n\n正文English保持原样。\n\n'
+            '> 推荐做法。\n\n| 项目 |\n| --- |\n| 甲 |\n| 乙 |\n\n'
+            '```python\nprint("hello")\n```\n'))
+        upstream = workflow.load(self.article)['completed'][:]
+        markdown = (self.article / 'article.md').read_bytes()
+        cover = (self.article / 'cover.png').read_bytes()
+        with patch.object(workflow.preferences, 'credential_value', return_value=''):
+            for theme, color in (('modern', '#EF7060'), ('blueprint-tech', '#667eea')):
+                with self.subTest(theme=theme):
+                    result = cli.format_article(Namespace(
+                        article=str(self.article), theme=theme, no_preformat=True))
+                    self.assertEqual(result, 0)
+                    html = (self.article / 'article.html').read_text(encoding='utf-8')
+                    self.assertIn(color, html)
+                    self.assertIn('正文章节', html)
+                    self.assertIn('正文English保持原样。', html)
+                    self.assertNotIn('<pre', html)
+                    manifest = workflow.require_publishable(self.article)
+                    self.assertEqual(manifest['theme'], theme)
+                    self.assertFalse(manifest['preformat'])
+                    state = workflow.load(self.article)
+                    self.assertEqual(state['completed'][:-1], upstream)
+                    self.assertEqual(len(state['completed']), len(workflow.STEPS))
+                    self.assertEqual((self.article / 'article.md').read_bytes(), markdown)
+                    self.assertEqual((self.article / 'cover.png').read_bytes(), cover)
+
     def test_checks_reject_unpublishable_artifacts(self):
         finish_article(self.article)
         state = workflow.load(self.article)

@@ -320,7 +320,9 @@ def _md_to_html(md_text: str, styles: dict) -> str:
             if data_rows:
                 table_html = f'<table style="{tbl_style}">'
                 for ri, row in enumerate(data_rows):
-                    table_html += "<tr>"
+                    row_key = "tr-head" if ri == 0 else ("tr-odd" if ri % 2 else "tr-even")
+                    row_style = styles.get(row_key, "")
+                    table_html += f'<tr style="{row_style}">' if row_style else "<tr>"
                     for cell in row:
                         tag = "th" if ri == 0 else "td"
                         st = th_style if ri == 0 else td_style
