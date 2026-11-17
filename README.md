@@ -87,15 +87,31 @@ python3 openwrite.py new product-topic --title "产品主题" --perspective prod
 
 文本写作可以先开始；执行生图、排版和发布脚本时需要相应运行环境。
 
+### 一条命令初始化（macOS / Linux）
+
+安装好 Python 3 和 Make 后，在项目根目录运行：
+
+```bash
+make setup
+```
+
+该命令自动创建或复用项目 `.venv`、安装 `requirements.txt` 依赖，再调用现有 `openwrite.py setup` 从 `.env.example` 生成 `.env`。已有 `.env` 不覆盖，不自动填写密钥，也不会生图或发布。依赖安装需要联网；已安装 `uv` 时优先使用，否则使用 Python 自带的 venv/pip，不向系统 Python 安装项目依赖。
+
+随后编辑根目录 `.env`，设置平台、写作视角及按需使用的服务凭证。微信发布凭证可以等上传草稿前再填。无需手动激活虚拟环境；检查环境用 `make doctor`，其他项目命令可用 `.venv/bin/python openwrite.py ...`。
+
+如果提示找不到 `make` 或 `python3`，需先安装相应工具；Ubuntu/Debian 可用 `sudo apt install make python3 python3-venv`，macOS 的 Make 可通过 Xcode Command Line Tools 获取（`xcode-select --install`）。Windows 原生 PowerShell 请使用下面的手动方式。
+
+### 手动初始化（含 Windows）
+
 ```bash
 python3 -m venv .venv
 # macOS / Linux
 source .venv/bin/activate
 # Windows PowerShell 使用 .venv\Scripts\Activate.ps1
 python3 -m pip install -r requirements.txt
-python3 openwrite.py doctor
-# 需要上传草稿时，生成本地配置并填写微信凭证
+# 生成平台、视角和凭证共用的本地配置；凭证可按需再填写
 python3 openwrite.py setup
+python3 openwrite.py doctor
 ```
 
 需要 Python 3.8+。核心依赖为 PyYAML、Requests 和 Pillow。`doctor` 只检查本地依赖、技能入口和模板，不调用 ComfyUI 或微信 API。`setup` 只复制配置模板，不联网、不写入任何密钥。

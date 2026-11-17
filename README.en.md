@@ -52,14 +52,18 @@ The original four skill names remain unchanged. The new `openwrite-images` capab
 
 Python 3.8+ is required for the core scripts.
 
+On macOS/Linux with Python 3 and Make installed, run `make setup` from the project root. It creates or reuses `.venv`, installs dependencies (using `uv` when available, otherwise venv/pip), and invokes the existing configuration setup command to create `.env` without overwriting an existing file. Dependency installation needs network access; no credentials are filled in and no images or drafts are uploaded. Edit `.env` for platform, perspective and optional service credentials, then run `make doctor`. Activation is unnecessary; use `.venv/bin/python openwrite.py ...` for other commands. Rednote additionally needs `.venv/bin/python -m playwright install chromium`.
+
+If Make or Python is missing, install those prerequisites first. For native Windows PowerShell or manual setup:
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 # Windows PowerShell: .venv\Scripts\Activate.ps1
 python3 -m pip install -r requirements.txt
-python3 openwrite.py doctor
-# Required only for uploading drafts: create the local config and fill in credentials
+# Create shared platform/perspective/service configuration; fill credentials when needed
 python3 openwrite.py setup
+python3 openwrite.py doctor
 
 python3 openwrite.py new rag-guide --title "RAG explained" --type tech
 # Use --type product for the product manager perspective.
