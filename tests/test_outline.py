@@ -1,4 +1,5 @@
 """Title/outline checkpoint between analysis and draft, including the config opt-out."""
+import layout
 import json
 from pathlib import Path
 import shutil
@@ -16,11 +17,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def reach_analysis(article):
     workflow.initialize(article, '测试文章')
-    workflow.write_json(article / 'sources.json', {'version': 1, 'sources': [
+    workflow.write_json(layout.path(article, 'sources.json'), {'version': 1, 'sources': [
         {'id': 's1', 'title': '用户资料', 'kind': 'user', 'content': '可验证的测试资料内容'},
     ]})
     workflow.complete(article, 'search')
-    (article / 'analysis.md').write_text('# 分析\n\nsource:s1 支持文章中的观点。\n', encoding='utf-8')
+    (layout.path(article, 'analysis.md')).write_text('# 分析\n\nsource:s1 支持文章中的观点。\n', encoding='utf-8')
     workflow.complete(article, 'analysis')
 
 
@@ -32,36 +33,36 @@ class OutlineCheckpointTests(unittest.TestCase):
         reach_analysis(self.article)
 
     def write_draft(self, title='测试文章'):
-        (self.article / 'draft.md').write_text(f'# {title}\n\n正文内容。\n', encoding='utf-8')
+        (layout.path(self.article, 'draft.md')).write_text(f'# {title}\n\n正文内容。\n', encoding='utf-8')
 
     def test_draft_is_blocked_until_user_approves_title_and_outline(self):
         self.write_draft()
         with self.assertRaises(ValueError):
             workflow.complete(self.article, 'draft')
         approve_outline(self.article)
-        data = workflow.read_json(self.article / 'outline.json')
+        data = workflow.read_json(layout.path(self.article, 'outline.json'))
         data['approved'] = False
-        workflow.write_json(self.article / 'outline.json', data)
+        workflow.write_json(layout.path(self.article, 'outline.json'), data)
         with self.assertRaises(ValueError) as error:
             workflow.complete(self.article, 'draft')
         self.assertIn('尚未获得用户确认', str(error.exception))
         data['approved'] = True
-        workflow.write_json(self.article / 'outline.json', data)
+        workflow.write_json(layout.path(self.article, 'outline.json'), data)
         workflow.complete(self.article, 'draft')
         self.assertEqual(workflow.current(workflow.load(self.article)), 'cover')
 
     def test_candidates_need_three_titles_and_both_mandatory_styles(self):
         self.write_draft()
         approve_outline(self.article)
-        data = workflow.read_json(self.article / 'outline.json')
+        data = workflow.read_json(layout.path(self.article, 'outline.json'))
         data['candidates'] = data['candidates'][:2]
-        workflow.write_json(self.article / 'outline.json', data)
+        workflow.write_json(layout.path(self.article, 'outline.json'), data)
         with self.assertRaises(ValueError):
             workflow.complete(self.article, 'draft')
         approve_outline(self.article)
-        data = workflow.read_json(self.article / 'outline.json')
+        data = workflow.read_json(layout.path(self.article, 'outline.json'))
         data['candidates'][0]['style'] = '利益实用'
-        workflow.write_json(self.article / 'outline.json', data)
+        workflow.write_json(layout.path(self.article, 'outline.json'), data)
         with self.assertRaises(ValueError) as error:
             workflow.complete(self.article, 'draft')
         self.assertIn('激进悬念', str(error.exception))
@@ -80,7 +81,7 @@ class OutlineCheckpointTests(unittest.TestCase):
     def test_changing_outline_after_approval_invalidates_it(self):
         self.write_draft()
         approve_outline(self.article)
-        (self.article / 'outline.md').write_text('# 改了大纲\n\n用户还没重新确认。\n', encoding='utf-8')
+        (layout.path(self.article, 'outline.md')).write_text('# 改了大纲\n\n用户还没重新确认。\n', encoding='utf-8')
         with self.assertRaises(ValueError) as error:
             workflow.complete(self.article, 'draft')
         self.assertIn('重新取得用户确认', str(error.exception))
@@ -99,11 +100,11 @@ class OutlineCheckpointTests(unittest.TestCase):
         article.mkdir()
         seed_body(article)
         self.assertIsNone(workflow.stale_step(article, workflow.load(article)))
-        (article / 'outline.md').write_text('# 新大纲\n\n确认后又被修改。\n', encoding='utf-8')
+        (layout.path(article, 'outline.md')).write_text('# 新大纲\n\n确认后又被修改。\n', encoding='utf-8')
         self.assertEqual(workflow.stale_step(article, workflow.load(article))[0], 'draft')
 
     def test_legacy_task_without_field_keeps_original_behaviour(self):
-        path = self.article / 'workflow.json'
+        path = layout.path(self.article, 'workflow.json')
         state = json.loads(path.read_text())
         del state['outline_approval']
         path.write_text(json.dumps(state))
@@ -116,7 +117,7 @@ class OutlineConfigTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix='openwrite-outline-config-')
         self.addCleanup(self.tmp.cleanup)
         self.project = Path(self.tmp.name).resolve()
-        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py'):
+        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py'):
             shutil.copy2(ROOT / name, self.project / name)
         shutil.copytree(ROOT / 'skills', self.project / 'skills')
 
@@ -145,18 +146,18 @@ class OutlineConfigTests(unittest.TestCase):
         self.write_env('WeChat=true\nWriterRole=SelfMediaBlogger\nOutlineApproval=false\n')
         self.run_cli('new', 'auto', '--title', '自动写作')
         article = self.project / 'articles/auto'
-        state = json.loads((article / 'workflow.json').read_text())
+        state = json.loads((layout.path(article, 'workflow.json')).read_text())
         self.assertFalse(state['outline_approval'])
-        self.assertIn('用户已授权跳过', (article / 'brief.md').read_text())
-        workflow.write_json(article / 'sources.json', {'version': 1, 'sources': [
+        self.assertIn('用户已授权跳过', (layout.path(article, 'brief.md')).read_text())
+        workflow.write_json(layout.path(article, 'sources.json'), {'version': 1, 'sources': [
             {'id': 's1', 'title': '用户资料', 'kind': 'user', 'content': '实际资料'},
         ]})
         self.run_cli('workflow', 'complete', str(article), '--step', 'search')
-        (article / 'analysis.md').write_text('source:s1 支持观点。')
+        (layout.path(article, 'analysis.md')).write_text('source:s1 支持观点。')
         self.run_cli('workflow', 'complete', str(article), '--step', 'analysis')
-        (article / 'draft.md').write_text('# 自动写作\n\n正文内容。\n')
+        (layout.path(article, 'draft.md')).write_text('# 自动写作\n\n正文内容。\n')
         self.run_cli('workflow', 'complete', str(article), '--step', 'draft')
-        self.assertFalse((article / 'outline.json').exists())
+        self.assertFalse((layout.path(article, 'outline.json')).exists())
         # Changing the config later must not alter the saved task choice.
         self.write_env('WeChat=true\nWriterRole=SelfMediaBlogger\nOutlineApproval=true\n')
         status = self.run_cli('workflow', 'status', str(article))
@@ -165,15 +166,15 @@ class OutlineConfigTests(unittest.TestCase):
     def test_explicit_skip_flag_overrides_enabled_config(self):
         self.write_env('WeChat=true\nWriterRole=SelfMediaBlogger\nOutlineApproval=true\n')
         self.run_cli('new', 'manual', '--title', '手动确认')
-        self.assertTrue(json.loads((self.project / 'articles/manual/workflow.json').read_text())['outline_approval'])
+        self.assertTrue(json.loads(layout.path(self.project / 'articles/manual', 'workflow.json').read_text())['outline_approval'])
         self.run_cli('new', 'skipped', '--title', '跳过确认', '--skip-outline')
-        self.assertFalse(json.loads((self.project / 'articles/skipped/workflow.json').read_text())['outline_approval'])
+        self.assertFalse(json.loads(layout.path(self.project / 'articles/skipped', 'workflow.json').read_text())['outline_approval'])
         manual = self.project / 'articles/manual'
-        workflow.write_json(manual / 'sources.json', {'version': 1, 'sources': [
+        workflow.write_json(layout.path(manual, 'sources.json'), {'version': 1, 'sources': [
             {'id': 's1', 'title': '用户资料', 'kind': 'user', 'content': '实际资料'},
         ]})
         workflow.complete(manual, 'search')
-        (manual / 'analysis.md').write_text('source:s1 支持观点。')
+        (layout.path(manual, 'analysis.md')).write_text('source:s1 支持观点。')
         workflow.complete(manual, 'analysis')
         status = self.run_cli('workflow', 'status', str(manual))
         self.assertIn('标题与大纲检查点：开启', status.stdout)

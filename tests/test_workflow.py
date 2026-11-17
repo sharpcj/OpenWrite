@@ -1,4 +1,5 @@
 """Seven-stage progression, invalidation and project command gates."""
+import layout
 from argparse import Namespace
 from contextlib import redirect_stdout
 import importlib.util
@@ -31,19 +32,19 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             workflow.complete(self.article, 'draft')
         self.assertEqual(workflow.current(workflow.load(self.article)), 'search')
-        workflow.write_json(self.article / 'sources.json', {'version': 1, 'sources': []})
+        workflow.write_json(layout.path(self.article, 'sources.json'), {'version': 1, 'sources': []})
         with self.assertRaises(ValueError):
             workflow.complete(self.article, 'search')
 
     def test_analysis_must_reference_known_sources_and_title_is_not_body(self):
         seed_body(self.article)
         workflow.reset(self.article, 'analysis')
-        (self.article / 'analysis.md').write_text('source:missing 未知来源')
+        (layout.path(self.article, 'analysis.md')).write_text('source:missing 未知来源')
         with self.assertRaises(ValueError):
             workflow.complete(self.article, 'analysis')
-        (self.article / 'analysis.md').write_text('source:s1 有依据的判断')
+        (layout.path(self.article, 'analysis.md')).write_text('source:s1 有依据的判断')
         workflow.complete(self.article, 'analysis')
-        (self.article / 'draft.md').write_text('# 只有标题\n')
+        (layout.path(self.article, 'draft.md')).write_text('# 只有标题\n')
         with self.assertRaises(ValueError):
             workflow.complete(self.article, 'draft')
 
@@ -81,11 +82,11 @@ class WorkflowTests(unittest.TestCase):
             workflow.complete(self.article, 'content')
         with self.assertRaises(ValueError):
             workflow.finalize(self.article)
-        workflow.write_json(self.article / 'content-images.json', {'needed': False, 'reason': '纯文字足够清楚'})
+        workflow.write_json(layout.path(self.article, 'content-images.json'), {'needed': False, 'reason': '纯文字足够清楚'})
         workflow.complete(self.article, 'content')
         self.assertFalse((self.article / 'article.md').exists())
         workflow.finalize(self.article)
-        self.assertEqual((self.article / 'article.md').read_text(), (self.article / 'draft.md').read_text())
+        self.assertEqual((self.article / 'article.md').read_text(), (layout.path(self.article, 'draft.md')).read_text())
         self.assertEqual(workflow.current(workflow.load(self.article)), 'format')
         with self.assertRaises(ValueError):
             workflow.require_finished(self.article)
@@ -98,7 +99,7 @@ class WorkflowTests(unittest.TestCase):
         plan(self.article, content=True)
         self.assertIsNone(workflow.stale_step(self.article, workflow.load(self.article)))
         obtain(self.article, 'diagram')
-        workflow.write_json(self.article / 'content-images.json', {'needed': True, 'reason': '需要图示'})
+        workflow.write_json(layout.path(self.article, 'content-images.json'), {'needed': True, 'reason': '需要图示'})
         with self.assertRaises(ValueError):
             workflow.complete(self.article, 'content')
         workflow.complete(self.article, 'content', reviewed=True, note='图示与正文一致')
@@ -113,7 +114,7 @@ class WorkflowTests(unittest.TestCase):
         obtain(self.article, 'cover')
         workflow.complete(self.article, 'cover', reviewed=True, note='已检查')
         obtain(self.article, 'diagram')
-        workflow.write_json(self.article / 'content-images.json', {'needed': True, 'reason': '需要'})
+        workflow.write_json(layout.path(self.article, 'content-images.json'), {'needed': True, 'reason': '需要'})
         with self.assertRaises(ValueError):
             workflow.complete(self.article, 'content', reviewed=True, note='已检查')
         plan(self.article, content=True)
@@ -124,7 +125,7 @@ class WorkflowTests(unittest.TestCase):
     def test_modified_upstream_requires_reset_and_preserves_files(self):
         finish_article(self.article)
         old_article = (self.article / 'article.md').read_bytes()
-        (self.article / 'draft.md').write_text('# 测试文章\n\n修改后的正文。\n')
+        (layout.path(self.article, 'draft.md')).write_text('# 测试文章\n\n修改后的正文。\n')
         self.assertEqual(workflow.stale_step(self.article, workflow.load(self.article))[0], 'draft')
         with self.assertRaises(ValueError):
             workflow.require_finished(self.article)
@@ -137,9 +138,9 @@ class WorkflowTests(unittest.TestCase):
 
     def test_modified_sources_invalidates_the_first_step(self):
         seed_body(self.article)
-        data = workflow.read_json(self.article / 'sources.json')
+        data = workflow.read_json(layout.path(self.article, 'sources.json'))
         data['sources'][0]['content'] = '资料已经变化'
-        workflow.write_json(self.article / 'sources.json', data)
+        workflow.write_json(layout.path(self.article, 'sources.json'), data)
         self.assertEqual(workflow.stale_step(self.article, workflow.load(self.article))[0], 'search')
         with self.assertRaises(ValueError):
             workflow.complete(self.article, 'cover', reviewed=True, note='不应跳过')
@@ -175,7 +176,7 @@ class WorkflowTests(unittest.TestCase):
     def test_placement_cannot_match_only_part_of_a_paragraph(self):
         seed_body(self.article)
         plan(self.article, content=True, anchor='正文')
-        workflow.write_json(self.article / 'content-images.json', {'needed': True, 'reason': '需要图示'})
+        workflow.write_json(layout.path(self.article, 'content-images.json'), {'needed': True, 'reason': '需要图示'})
         with self.assertRaises(ValueError):
             workflow.final_text(self.article)
 
@@ -183,7 +184,7 @@ class WorkflowTests(unittest.TestCase):
         import shutil
         project = self.article / 'project'
         project.mkdir()
-        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py'):
+        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py'):
             shutil.copy2(ROOT / name, project / name)
         shutil.copytree(ROOT / 'skills', project / 'skills')
 
@@ -202,14 +203,14 @@ class WorkflowTests(unittest.TestCase):
         location = str(article)
         self.assertFalse((article / 'article.md').exists())
         run('workflow', 'complete', location, '--step', 'analysis', ok=False)
-        workflow.write_json(article / 'sources.json', {'version': 1, 'sources': [
+        workflow.write_json(layout.path(article, 'sources.json'), {'version': 1, 'sources': [
             {'id': 's1', 'title': '用户资料', 'kind': 'user', 'content': '测试的实际资料'},
         ]})
         run('workflow', 'complete', location, '--step', 'search')
-        (article / 'analysis.md').write_text('source:s1 支持正文观点。')
+        (layout.path(article, 'analysis.md')).write_text('source:s1 支持正文观点。')
         run('workflow', 'complete', location, '--step', 'analysis')
         approve_outline(article, title='命令行测试')
-        (article / 'draft.md').write_text('# 命令行测试\n\n正文内容。\n')
+        (layout.path(article, 'draft.md')).write_text('# 命令行测试\n\n正文内容。\n')
         run('workflow', 'complete', location, '--step', 'draft')
         plan(article)
         from PIL import Image
@@ -218,29 +219,29 @@ class WorkflowTests(unittest.TestCase):
         run('image', location, '--id', 'cover', '--backend', 'file', '--source', str(source))
         run('workflow', 'complete', location, '--step', 'cover', ok=False)
         run('workflow', 'complete', location, '--step', 'cover', '--reviewed', '--note', '已实际检查')
-        workflow.write_json(article / 'content-images.json', {'needed': False, 'reason': '无需配图'})
+        workflow.write_json(layout.path(article, 'content-images.json'), {'needed': False, 'reason': '无需配图'})
         run('workflow', 'complete', location, '--step', 'content')
         run('workflow', 'finalize', location)
         run('format', location, '--no-preformat')
         self.assertTrue((article / 'article.html').is_file())
-        self.assertTrue((article / 'publish-manifest.json').is_file())
+        self.assertTrue((layout.path(article, 'publish-manifest.json')).is_file())
         self.assertFalse((article / 'format-state.json').exists())
         self.assertIsNone(workflow.current(workflow.load(article)))
         self.assertEqual(workflow.load(article)['title'], '命令行测试')
-        (article / 'draft.md').write_text('# 修改\n\n正文已经修改。\n')
+        (layout.path(article, 'draft.md')).write_text('# 修改\n\n正文已经修改。\n')
         run('format', location, ok=False)
         status = run('workflow', 'status', location)
         self.assertIn('[已过期] draft', status.stdout)
 
     def test_status_is_read_only_and_survives_new_process(self):
         seed_body(self.article)
-        before = (self.article / 'workflow.json').read_bytes()
+        before = (layout.path(self.article, 'workflow.json')).read_bytes()
         result = subprocess.run([sys.executable, '-B', str(ROOT / 'openwrite.py'),
                                  'workflow', 'status', str(self.article)],
                                 cwd=self.article, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('[当前] cover', result.stdout)
-        self.assertEqual((self.article / 'workflow.json').read_bytes(), before)
+        self.assertEqual((layout.path(self.article, 'workflow.json')).read_bytes(), before)
 
 
 if __name__ == '__main__':

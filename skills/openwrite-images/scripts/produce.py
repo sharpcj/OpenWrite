@@ -20,6 +20,11 @@ import sys
 import tempfile
 
 CAPABILITY = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = CAPABILITY.parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+import layout
 
 
 def load_module(name: str, filename: str):
@@ -65,7 +70,7 @@ def _validate_overlay(item: dict) -> None:
 
 def _cover_requirement(article: Path, request: dict) -> dict:
     """Use task snapshots, never mutable .env defaults, to resolve cover design."""
-    state_file = article / 'workflow.json'
+    state_file = layout.existing(article, 'workflow.json')
     if request.get('role') != 'cover' or not state_file.is_file():
         return request
     state = json.loads(state_file.read_text(encoding='utf-8'))
@@ -83,9 +88,9 @@ def _cover_requirement(article: Path, request: dict) -> dict:
     if style.get('color_tone'):
         result['palette'] = [style['color_tone']]
     if style.get('layout'):
-        layout = style['layout']
-        instructions = layout
-        if layout in ('左文右图', 'left-text-right-image'):
+        cover_layout = style['layout']
+        instructions = cover_layout
+        if cover_layout in ('左文右图', 'left-text-right-image'):
             instructions += ('; one continuous unified background across the full image, '
                              'main subject confined to the right 45%, keep the left 50% quiet and uncluttered '
                              'for text, no hard split or separate text panel, no text rendered in the base image')
@@ -103,7 +108,7 @@ def _cover_requirement(article: Path, request: dict) -> dict:
 
 
 def load_request(article: Path, request_id: str) -> dict:
-    manifest = json.loads((article / 'image-requests.json').read_text(encoding='utf-8'))
+    manifest = json.loads((layout.existing(article, 'image-requests.json')).read_text(encoding='utf-8'))
     if (not isinstance(manifest, dict) or type(manifest.get('version')) is not int
             or manifest.get('version') != 1):
         raise ValueError('image-requests.json 必须使用 version: 1')
@@ -319,7 +324,7 @@ def produce(args: argparse.Namespace) -> dict:
     if output.exists() and not args.overwrite:
         raise ValueError(f'输出已存在：{output}；需要替换时显式使用 --overwrite')
     # Read the prior report before obtaining an image; malformed state must not cause paid calls.
-    report_path = article / 'image-results.json'
+    report_path = layout.path(article, 'image-results.json')
     if report_path.is_symlink():
         raise ValueError('结果清单不能是符号链接')
     report = json.loads(report_path.read_text(encoding='utf-8')) if report_path.exists() else {'version': 1, 'images': []}

@@ -1,4 +1,5 @@
 """Checks for project-local workspaces and command integration, without remote calls."""
+import layout
 import importlib.util
 import io
 from contextlib import redirect_stdout
@@ -31,14 +32,14 @@ class WorkspaceTests(unittest.TestCase):
         with patch.object(workspace, 'ROOT', self.directory), redirect_stdout(io.StringIO()):
             self.assertEqual(workspace.new_article(args), 0)
             article = self.directory / 'articles/产品文章'
-            self.assertEqual((article / 'draft.md').read_text(), '# 一个主题\n')
+            self.assertEqual((layout.path(article, 'draft.md')).read_text(), '# 一个主题\n')
             self.assertFalse((article / 'article.md').exists())
             self.assertEqual(workflow.current(workflow.load(article)), 'search')
-            self.assertIn('产品经理', (article / 'brief.md').read_text())
-            (article / 'draft.md').write_text('已编辑的正文')
+            self.assertIn('产品经理', (layout.path(article, 'brief.md')).read_text())
+            (layout.path(article, 'draft.md')).write_text('已编辑的正文')
             with self.assertRaises(FileExistsError):
                 workspace.new_article(args)
-            self.assertEqual((article / 'draft.md').read_text(), '已编辑的正文')
+            self.assertEqual((layout.path(article, 'draft.md')).read_text(), '已编辑的正文')
 
     def test_new_article_rejects_path_traversal(self):
         with patch.object(workspace, 'ROOT', self.directory):

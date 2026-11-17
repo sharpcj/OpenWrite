@@ -1,4 +1,5 @@
 """Multi-source image capability: config, auto fallback, online/stock backends, cover overlay."""
+import layout
 from argparse import Namespace
 import importlib.util
 import io
@@ -90,7 +91,7 @@ class AutoFallbackTests(unittest.TestCase):
         self.write_plan([self.request])
 
     def write_plan(self, images):
-        (self.article / 'image-requests.json').write_text(
+        (layout.path(self.article, 'image-requests.json')).write_text(
             json.dumps({'version': 1, 'images': images}, ensure_ascii=False), encoding='utf-8')
 
     def args(self, **overrides):
@@ -199,7 +200,7 @@ class RequestValidationTests(unittest.TestCase):
                      'width': 60, 'height': 40, 'prompt': '测试', 'text': []}
 
     def write(self, item):
-        (self.article / 'image-requests.json').write_text(
+        (layout.path(self.article, 'image-requests.json')).write_text(
             json.dumps({'version': 1, 'images': [item]}, ensure_ascii=False), encoding='utf-8')
 
     def test_invalid_new_fields_rejected(self):
@@ -380,7 +381,7 @@ class CoverOverlayTests(unittest.TestCase):
     def write_plan(self, overlay):
         request = {'id': 'cover', 'role': 'cover', 'output': 'cover.png',
                    'width': 200, 'height': 100, 'prompt': '底图', 'text': [], 'overlay': overlay}
-        (self.article / 'image-requests.json').write_text(
+        (layout.path(self.article, 'image-requests.json')).write_text(
             json.dumps({'version': 1, 'images': [request]}, ensure_ascii=False), encoding='utf-8')
         return request
 
@@ -418,14 +419,14 @@ class CoverOverlayTests(unittest.TestCase):
         request = {'id': 'cover', 'role': 'cover', 'output': 'cover.png',
                    'width': 200, 'height': 100, 'prompt': '底图', 'text': [],
                    'overlay': {'title': '别的标题'}}
-        (self.article / 'image-requests.json').write_text(
+        (layout.path(self.article, 'image-requests.json')).write_text(
             json.dumps({'version': 1, 'images': [request]}, ensure_ascii=False), encoding='utf-8')
         runtime.produce(self.args())
         with self.assertRaises(ValueError) as caught:
             workflow.complete(self.article, 'cover', reviewed=True, note='已检查')
         self.assertIn('overlay.title', str(caught.exception))
         request['overlay']['title'] = '测试文章'
-        (self.article / 'image-requests.json').write_text(
+        (layout.path(self.article, 'image-requests.json')).write_text(
             json.dumps({'version': 1, 'images': [request]}, ensure_ascii=False), encoding='utf-8')
         runtime.produce(self.args(overwrite=True))
         state = workflow.complete(self.article, 'cover', reviewed=True, note='已检查封面叠字')

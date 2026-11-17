@@ -1,4 +1,5 @@
 """Platform adapter registry: shared order, per-platform product specs and gates."""
+import layout
 import json
 from pathlib import Path
 import tempfile
@@ -39,7 +40,7 @@ class RegistryTests(unittest.TestCase):
         profile = platforms.spec('rednote')
         self.assertTrue(profile['implemented'])
         self.assertTrue(profile['publish_implemented'])
-        self.assertEqual(profile['format_label'], '组装并保存可发布产物')
+        self.assertEqual(profile['format_label'], '生成可发布交付件')
         self.assertEqual(profile['limits']['title_chars'], 20)
         self.assertEqual((profile['cover']['width'], profile['cover']['height']), (1080, 1440))
         self.assertEqual(profile['cover']['output'], 'xhs-01-cover.png')
@@ -57,12 +58,12 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(profile['limits']['desc_chars'], 1000)
         self.assertEqual(profile['limits']['max_images'], 18)
 
-    def test_step_labels_are_platform_specific(self):
+    def test_step_labels_share_unified_format_label(self):
         wechat = platforms.step_labels({'platform': 'wechat'})
         rednote = platforms.step_labels({'platform': 'rednote'})
         self.assertEqual(wechat[:-1], rednote[:-1])
-        self.assertEqual(wechat[-1], '排版并保存可发布产物')
-        self.assertEqual(rednote[-1], '组装并保存可发布产物')
+        self.assertEqual(wechat[-1], '生成可发布交付件')
+        self.assertEqual(rednote[-1], '生成可发布交付件')
 
     def test_implemented_platforms_ship_their_skills(self):
         for name, profile in platforms.REGISTRY.items():
@@ -101,7 +102,7 @@ class PipelineGateTests(unittest.TestCase):
 
     def start(self, platform):
         workflow.initialize(self.article, '测试', 'blogger', platform, {})
-        workflow.write_json(self.article / 'sources.json', {'version': 1, 'sources': [
+        workflow.write_json(layout.path(self.article, 'sources.json'), {'version': 1, 'sources': [
             {'id': 's1', 'title': '用户资料', 'kind': 'user', 'content': '实际资料'},
         ]})
 

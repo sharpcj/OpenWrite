@@ -58,7 +58,7 @@ class EnvSetupTests(unittest.TestCase):
         self.assertEqual(outside.read_text(encoding='utf-8'), 'secret')
 
     def test_cli_setup_creates_env_and_second_run_keeps_it(self):
-        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py'):
+        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py'):
             shutil.copy2(ROOT / name, self.project / name)
         command = [sys.executable, '-B', str(self.project / 'openwrite.py'), 'setup']
         first = subprocess.run(command, cwd=self.project, capture_output=True, text=True)

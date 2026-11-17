@@ -1,4 +1,5 @@
 """Real-time storyboard: read-only aggregation, filters, pagination, HTTP API."""
+import layout
 from functools import partial
 from http.server import ThreadingHTTPServer
 import json
@@ -25,14 +26,14 @@ def make_task(root, name, platform='wechat', created=None, complete=False):
                                  workflow.check_publishable(article, workflow.load(article)))
     else:
         workflow.initialize(article, f'{name} 标题', 'blogger', platform, {})
-        workflow.write_json(article / 'sources.json', {'version': 1, 'sources': [
+        workflow.write_json(layout.path(article, 'sources.json'), {'version': 1, 'sources': [
             {'id': 's1', 'title': '用户资料', 'kind': 'user', 'content': '实际资料内容'},
         ]})
         workflow.complete(article, 'search')
     if created:
         state = workflow.load(article)
         state['created_at'] = created
-        workflow.write_json(article / 'workflow.json', state)
+        workflow.write_json(layout.path(article, 'workflow.json'), state)
     return article
 
 
@@ -52,7 +53,7 @@ class AggregationTests(unittest.TestCase):
         legacy = make_task(self.root, 'legacy')
         state = workflow.load(legacy)
         del state['created_at']
-        workflow.write_json(legacy / 'workflow.json', state)
+        workflow.write_json(layout.path(legacy, 'workflow.json'), state)
         self.assertTrue(board.summarize(legacy)['created_at'])
 
     def test_sort_desc_and_platform_and_date_filters(self):
@@ -78,31 +79,78 @@ class AggregationTests(unittest.TestCase):
     def test_detail_steps_and_deliverables_gate(self):
         article = make_task(self.root, 'progress')
         detail = board.task_detail(self.root, 'progress')
+        self.assertEqual(detail['steps'][0]['step'], 'direction')
         self.assertEqual(detail['steps'][0]['status'], 'done')
-        self.assertEqual(detail['steps'][1]['status'], 'current')
-        self.assertEqual(detail['steps'][2]['status'], 'pending')
+        self.assertEqual(detail['steps'][1]['status'], 'done')
+        self.assertEqual(detail['steps'][2]['status'], 'current')
+        self.assertEqual(detail['steps'][3]['status'], 'pending')
+        self.assertEqual(detail['steps'][-1]['step'], 'published')
+        self.assertEqual(detail['steps'][-1]['status'], 'pending')
         self.assertIsNone(detail['deliverables'])
         completed = make_task(self.root, 'done-note', 'rednote', complete=True)
         detail = board.task_detail(self.root, 'done-note')
         self.assertTrue(detail['completed'])
-        self.assertTrue(all(step['status'] == 'done' for step in detail['steps']))
+        self.assertTrue(all(step['status'] == 'done' for step in detail['steps'][1:8]))
+        self.assertEqual(detail['steps'][-1]['status'], 'current')  # 完成但未发布
         files = [image['file'] for image in detail['deliverables']['images']]
         self.assertEqual(files, ['xhs-01-cover.png', 'xhs-02-page.png'])
         self.assertTrue(all(image['exists'] for image in detail['deliverables']['images']))
         self.assertIsNotNone(detail['deliverables']['note'])
-        (completed / 'cards.md').write_text('# 卡片稿\n\n改了文案。\n', encoding='utf-8')
+        workflow.write_json(layout.path(completed, 'publish-record.json'), {
+            'version': 1, 'platform': 'rednote', 'title': 't', 'visibility': 'private',
+            'published_at': '2026-11-17T12:00:00+08:00'})
+        detail = board.task_detail(self.root, 'done-note')
+        self.assertEqual(detail['steps'][-1]['status'], 'done')
+        self.assertIn('仅自己可见', detail['steps'][-1]['note'])
+        (layout.path(completed, 'cards.md')).write_text('# 卡片稿\n\n改了文案。\n', encoding='utf-8')
         detail = board.task_detail(self.root, 'done-note')
         self.assertEqual(detail['stale'], 'draft')
-        self.assertEqual(detail['steps'][2]['status'], 'stale')
+        self.assertEqual(detail['steps'][3]['status'], 'stale')
+        self.assertEqual(detail['steps'][-1]['status'], 'done')  # 历史发布事实不因过期抹掉
+
+    def test_uninitialized_detail_shows_direction_as_current(self):
+        bare = self.root / 'articles/bare'
+        bare.mkdir()
+        detail = board.task_detail(self.root, 'bare')
+        self.assertEqual(detail['steps'][0]['status'], 'current')
+        self.assertEqual(detail['steps'][-1]['status'], 'pending')
+        self.assertEqual(len(detail['steps']), len(workflow.STEPS) + 2)
 
     def test_uninitialized_and_invalid_tasks_do_not_crash(self):
         bare = self.root / 'articles/bare'
         bare.mkdir()
         self.assertEqual(board.summarize(bare)['error'], '未初始化工作流')
         broken = make_task(self.root, 'broken')
-        (broken / 'workflow.json').write_text('{bad json', encoding='utf-8')
+        (layout.path(broken, 'workflow.json')).write_text('{bad json', encoding='utf-8')
         self.assertIsNotNone(board.summarize(broken)['error'])
         self.assertEqual(len(board.collect_tasks(self.root)), 2)
+
+    def test_overall_lifecycle_state(self):
+        running = make_task(self.root, 'running')
+        self.assertEqual((board.summarize(running)['overall'],
+                          board.summarize(running)['overall_label']), ('generating', '生成中'))
+        done = make_task(self.root, 'done', 'rednote', complete=True)
+        self.assertEqual((board.summarize(done)['overall'],
+                          board.summarize(done)['overall_label']), ('pending-publish', '待发布'))
+        (layout.path(done, 'cards.md')).write_text('# 卡片稿\n\n改了文案。\n', encoding='utf-8')
+        summary = board.summarize(done)
+        self.assertEqual(summary['stale'], 'draft')  # 过期只作提示，不占徽章状态
+        self.assertEqual((summary['overall'], summary['overall_label']), ('pending-publish', '待发布'))
+        workflow.write_json(layout.path(done, 'publish-record.json'), {
+            'version': 1, 'platform': 'rednote', 'title': 't', 'visibility': 'private',
+            'published_at': '2026-11-17T12:00:00+08:00'})
+        self.assertEqual((board.summarize(done)['overall'],
+                          board.summarize(done)['overall_label']), ('published', '已发布'))
+        bare = self.root / 'articles/bare'
+        bare.mkdir()
+        self.assertEqual((board.summarize(bare)['overall'],
+                          board.summarize(bare)['overall_label']), ('ungenerated', '未生成'))
+        broken = make_task(self.root, 'broken')
+        (layout.path(broken, 'workflow.json')).write_text('{bad json', encoding='utf-8')
+        self.assertEqual((board.summarize(broken)['overall'],
+                          board.summarize(broken)['overall_label']), ('ungenerated', '未生成'))
+        detail = board.task_detail(self.root, 'running')
+        self.assertEqual(detail['overall'], 'generating')
 
 
 class BoardHttpTests(unittest.TestCase):
@@ -136,6 +184,8 @@ class BoardHttpTests(unittest.TestCase):
         data = json.loads(body)
         self.assertEqual(data['total'], 2)
         self.assertEqual(data['items'][0]['name'], 'note')  # 完成时间较新
+        self.assertEqual(data['items'][0]['overall'], 'pending-publish')
+        self.assertEqual(data['items'][1]['overall'], 'generating')
         status, _, body = self.get('/api/task/note')
         detail = json.loads(body)
         self.assertTrue(detail['completed'])
@@ -169,7 +219,7 @@ class BoardHttpTests(unittest.TestCase):
             self.assertEqual(error.code, 404)
 
     def test_board_is_read_only(self):
-        path = self.root / 'articles/note/workflow.json'
+        path = layout.path(self.root / 'articles/note', 'workflow.json')
         before = path.read_bytes()
         self.get('/api/tasks')
         self.get('/api/task/note')

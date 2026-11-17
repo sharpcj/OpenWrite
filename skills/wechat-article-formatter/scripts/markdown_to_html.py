@@ -28,6 +28,11 @@ import yaml
 SCRIPT_DIR = Path(__file__).parent
 SKILL_DIR = SCRIPT_DIR.parent
 THEMES_DIR = SKILL_DIR / "themes"
+PROJECT_ROOT = SKILL_DIR.parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+import layout
 
 DEFAULT_VARIABLES = {
     "primary-color": "#0F4C81",
@@ -567,7 +572,7 @@ def main():
         overrides["font-size"] = args.font_size
 
     closing_md = None
-    closing_md_path = input_path.parent / "closing.md"
+    closing_md_path = layout.existing(input_path.parent, "closing.md")
     if closing_md_path.exists():
         closing_md = closing_md_path.read_text(encoding="utf-8")
         _info(f"已追加文末区块: {closing_md_path}")

@@ -1,4 +1,5 @@
 """Exercise image contracts with real local images and mocked external backends."""
+import layout
 from argparse import Namespace
 from contextlib import redirect_stdout
 import importlib.util
@@ -37,7 +38,7 @@ class ImageCapabilityTests(unittest.TestCase):
         self.write_plan([self.request])
 
     def write_plan(self, images):
-        (self.article / 'image-requests.json').write_text(
+        (layout.path(self.article, 'image-requests.json')).write_text(
             json.dumps({'version': 1, 'images': images}, ensure_ascii=False), encoding='utf-8',
         )
 
@@ -56,7 +57,7 @@ class ImageCapabilityTests(unittest.TestCase):
         self.assertEqual(result['review'], 'pending')
         self.assertEqual(result['status'], 'ready')
         self.assertEqual(result['request_hash'], runtime.request_hash(self.request))
-        report = json.loads((self.article / 'image-results.json').read_text())
+        report = json.loads((layout.path(self.article, 'image-results.json')).read_text())
         self.assertEqual(report['images'], [result])
 
     def test_dimension_mismatch_does_not_create_success_artifacts(self):
@@ -65,7 +66,7 @@ class ImageCapabilityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runtime.produce(self.args())
         self.assertFalse((self.article / 'cover.png').exists())
-        self.assertFalse((self.article / 'image-results.json').exists())
+        self.assertFalse((layout.path(self.article, 'image-results.json')).exists())
 
     def test_explicit_contain_adds_padding_at_target_size(self):
         self.request['height'] = 60
@@ -79,17 +80,17 @@ class ImageCapabilityTests(unittest.TestCase):
         self.source.write_text('not an image')
         with self.assertRaises(OSError):
             runtime.produce(self.args())
-        self.assertFalse((self.article / 'image-results.json').exists())
+        self.assertFalse((layout.path(self.article, 'image-results.json')).exists())
 
     def test_existing_artifacts_survive_a_failed_replacement(self):
         runtime.produce(self.args())
         old_image = (self.article / 'cover.png').read_bytes()
-        old_report = (self.article / 'image-results.json').read_bytes()
+        old_report = (layout.path(self.article, 'image-results.json')).read_bytes()
         self.source.write_text('broken')
         with self.assertRaises(OSError):
             runtime.produce(self.args(overwrite=True))
         self.assertEqual((self.article / 'cover.png').read_bytes(), old_image)
-        self.assertEqual((self.article / 'image-results.json').read_bytes(), old_report)
+        self.assertEqual((layout.path(self.article, 'image-results.json')).read_bytes(), old_report)
         with patch.object(runtime, 'obtain_source') as obtain:
             with self.assertRaises(ValueError):
                 runtime.produce(self.args())
@@ -110,7 +111,7 @@ class ImageCapabilityTests(unittest.TestCase):
             runtime.load_request(self.article, 'cover')
 
     def test_corrupt_previous_report_blocks_backend_call(self):
-        (self.article / 'image-results.json').write_text('{invalid')
+        (layout.path(self.article, 'image-results.json')).write_text('{invalid')
         with patch.object(runtime, 'obtain_source') as obtain:
             with self.assertRaises(ValueError):
                 runtime.produce(self.args(backend='comfyui', source=None))

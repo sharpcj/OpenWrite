@@ -1,4 +1,5 @@
 """Defaults, explicit task choices, ambiguity, and persistence without global state."""
+import layout
 import json
 from pathlib import Path
 import shutil
@@ -25,7 +26,7 @@ class PreferenceTests(unittest.TestCase):
         self.config.write_text(text, encoding='utf-8')
 
     def run_cli(self, *args):
-        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py'):
+        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py'):
             shutil.copy2(ROOT / name, self.project / name)
         return subprocess.run([sys.executable, '-B', str(self.project / 'openwrite.py'), *args],
                               cwd=self.project, capture_output=True, text=True)
@@ -124,18 +125,19 @@ class PreferenceTests(unittest.TestCase):
         self.assertFalse((self.project / 'articles/topic').exists())
         result = self.run_cli('new', 'topic', '--platform', 'wechat')
         self.assertEqual(result.returncode, 0, result.stderr)
-        state = json.loads((self.project / 'articles/topic/workflow.json').read_text())
+        state = json.loads(layout.path(self.project / 'articles/topic', 'workflow.json').read_text())
         self.assertEqual((state['platform'], state['perspective']), ('wechat', 'blogger'))
 
     def test_new_task_persists_choices_and_resume_does_not_read_changed_defaults(self):
         result = self.run_cli('new', 'topic', '--perspective', 'product')
         self.assertEqual(result.returncode, 0, result.stderr)
-        path = self.project / 'articles/topic/workflow.json'
+        article = self.project / 'articles/topic'
+        path = layout.path(article, 'workflow.json')
         before = path.read_bytes()
         state = json.loads(before)
         self.assertEqual(state['selection_source'], {'platform': 'config', 'perspective': 'explicit'})
         self.flags('WeChat=false\nRednote=true\nWriterRole=SelfMediaBlogger\n')
-        result = self.run_cli('workflow', 'status', str(path.parent))
+        result = self.run_cli('workflow', 'status', str(article))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('任务平台：微信；写作视角：产品经理', result.stdout)
         self.assertEqual(path.read_bytes(), before)
@@ -143,19 +145,19 @@ class PreferenceTests(unittest.TestCase):
     def test_legacy_type_alias_is_explicit_and_workflow_init_uses_defaults(self):
         result = self.run_cli('new', 'legacy', '--type', 'tech')
         self.assertEqual(result.returncode, 0, result.stderr)
-        state = json.loads((self.project / 'articles/legacy/workflow.json').read_text())
+        state = json.loads(layout.path(self.project / 'articles/legacy', 'workflow.json').read_text())
         self.assertEqual(state['perspective'], 'tech')
         existing = self.project / 'existing'
         existing.mkdir()
         result = self.run_cli('workflow', 'init', str(existing))
         self.assertEqual(result.returncode, 0, result.stderr)
-        state = json.loads((existing / 'workflow.json').read_text())
+        state = json.loads((layout.path(existing, 'workflow.json')).read_text())
         self.assertEqual((state['platform'], state['perspective']), ('wechat', 'blogger'))
 
     def test_legacy_tasks_keep_wechat_and_their_original_view(self):
         existing = self.project / 'old'
         existing.mkdir()
-        path = existing / 'workflow.json'
+        path = layout.path(existing, 'workflow.json')
         path.write_text(json.dumps({'version': 1, 'title': '旧任务', 'type': 'product',
                                     'revision': 0, 'completed': []}))
         before = path.read_bytes()
@@ -169,9 +171,9 @@ class PreferenceTests(unittest.TestCase):
         result = self.run_cli('new', 'rednote-topic', '--platform', 'rednote')
         self.assertEqual(result.returncode, 0, result.stderr)
         article = self.project / 'articles/rednote-topic'
-        state = json.loads((article / 'workflow.json').read_text())
+        state = json.loads((layout.path(article, 'workflow.json')).read_text())
         self.assertEqual(state['platform'], 'rednote')
-        (article / 'sources.json').write_text(json.dumps({'version': 1, 'sources': [
+        (layout.path(article, 'sources.json')).write_text(json.dumps({'version': 1, 'sources': [
             {'id': 's1', 'title': '用户资料', 'kind': 'user', 'content': '实际资料内容'},
         ]}, ensure_ascii=False), encoding='utf-8')
         result = self.run_cli('workflow', 'complete', str(article), '--step', 'search')
@@ -179,7 +181,7 @@ class PreferenceTests(unittest.TestCase):
         status = self.run_cli('workflow', 'status', str(article))
         self.assertIn('任务平台：小红书', status.stdout)
         self.assertIn('rednote-note-writer', status.stdout)
-        self.assertIn('组装并保存可发布产物', status.stdout)
+        self.assertIn('生成可发布交付件', status.stdout)
 
 
 if __name__ == '__main__':

@@ -14,6 +14,8 @@ import time
 
 from markdown_to_html import convert_markdown, _load_theme
 
+import layout
+
 
 class BatchConverter:
     """批量转换器：共用主题，逐文件调用核心转换函数。"""
@@ -47,7 +49,7 @@ class BatchConverter:
             else:
                 output_file = input_file.with_suffix('.html')
             start_time = time.time()
-            closing_path = input_file.parent / 'closing.md'
+            closing_path = layout.existing(input_file.parent, 'closing.md')
             closing_md = closing_path.read_text(encoding='utf-8') if closing_path.exists() else None
             html = convert_markdown(input_file.read_text(encoding='utf-8'), self.theme,
                                     closing_md=closing_md)

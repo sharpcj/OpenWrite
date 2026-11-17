@@ -28,7 +28,7 @@ REGISTRY = {
         'publisher': 'wechat-draft-publisher',
         'publisher_entry': 'publisher.py',
         'publish_implemented': True,
-        'format_label': '排版并保存可发布产物',
+        'format_label': '生成可发布交付件',
         # 长文形态：Markdown 整合后转 inline-style HTML。
         'markdown_artifact': 'article.md',
         'rendered_artifact': 'article.html',
@@ -57,7 +57,7 @@ REGISTRY = {
         'renderer': 'openwrite-images',
         'publisher': 'rednote-publisher',
         'publisher_entry': 'publish_note.py',
-        'format_label': '组装并保存可发布产物',
+        'format_label': '生成可发布交付件',
         # 图文形态：笔记文案 + 分页卡片稿 → 3:4 组图，封面即首图。
         'markdown_artifact': 'note.md',
         'rendered_artifact': None,

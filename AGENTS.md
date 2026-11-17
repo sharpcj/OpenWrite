@@ -38,7 +38,7 @@ OpenWrite 是一个微信公众号创作工作区。用户在项目中提出写�
 ## 文章工作区
 
 - 每篇文章使用独立的 `articles/<名称>/` 目录。优先使用用户指定的已有文章；新建文章可运行 `python3 openwrite.py new <名称> --title "标题"`，仅在用户明确指定时传入 `--platform` 或 `--perspective`。
-- `brief.md` 保存主题、受众、视角、资料和用户约束；`outline.md` / `outline.json` 保存标题候选、大纲与用户确认；`draft.md` 保存正文草稿，`article.md` 为最终整合结果；`image-requests.json` 保存设计需求，`image-results.json` 保存图片执行结果；封面为 `cover.png`；可选内容结构图为 `structure.png`；其他配图用有含义的文件名；排版输出为 `article.html`，发布清单为 `publish-manifest.json`。
+- 工作区分三层：**根目录只放可交付产物**（`article.html`、`article.md`、`cover.png`、正文配图；小红书为 `note.md` 与 `xhs-*.png`）；**`process/` 放中间产物**（`brief.md` 主题受众与约束、`sources.json` 来源、`analysis.md` 分析、`outline.md` 大纲讨论稿、`draft.md` 正文草稿、`cards.md` 卡片稿，以及未被需求/正文引用的封面底图、生图原图、候选图）；**`workflow/` 放框架流程物件**（`workflow.json` 状态、`outline.json` 确认记录、`image-requests.json` 配图需求、`image-results.json` 执行结果、`content-images.json` 配图决策、`publish-manifest.json` 发布清单、`publish-record.json` 发布记录）。技能文中裸文件名按此表解析；旧平铺目录用 `workflow migrate <目录>` 升级。
 - 新建命令只创建工作区和初始文件，不代表正文或图片已完成。不要覆盖另一篇文章的成果，也不要凭文件修改时间选择待发布文章。
 - Markdown 中正文配图使用同目录的相对路径；封面不嵌入正文，发布时单独上传。
 - 文章目录默认不进入 Git，技能代码与个人创作产物分开存放。跨会话或跨 Agent 继续任务时，先运行 `workflow status <文章目录>`，再阅读 `brief.md` 和已有产物。

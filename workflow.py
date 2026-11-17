@@ -1,5 +1,6 @@
 """Small persisted workflow for OpenWrite; local process gates, not a security boundary."""
 from __future__ import annotations
+import layout
 
 import hashlib
 import json
@@ -41,6 +42,7 @@ def file_hash(path: Path) -> str:
 def write_json(path: Path, value: dict) -> None:
     if path.is_symlink():
         raise ValueError(f'状态文件不能是符号链接：{path.name}')
+    path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
                                      prefix='.workflow-', delete=False) as handle:
         temporary = Path(handle.name)
@@ -62,7 +64,7 @@ def read_json(path: Path) -> dict:
 def initialize(article: Path, title: str = '', perspective: str = 'tech',
                platform: str = platforms.WECHAT, selection_source=None,
                outline_approval: bool = True, cover_style=None) -> dict:
-    path = article / 'workflow.json'
+    path = layout.path(article, 'workflow.json')
     if path.exists():
         raise ValueError('workflow.json 已存在；继续任务请查看 status，重做请使用 reset')
     if platform not in preferences.PLATFORM_LABELS or perspective not in preferences.PERSPECTIVE_LABELS:
@@ -79,9 +81,9 @@ def initialize(article: Path, title: str = '', perspective: str = 'tech',
 
 
 def load(article: Path) -> dict:
-    if not (article / 'workflow.json').is_file():
+    if not (layout.existing(article, 'workflow.json')).is_file():
         raise ValueError('尚未初始化工作流；请运行 openwrite.py workflow init <文章目录>')
-    state = read_json(article / 'workflow.json')
+    state = read_json(layout.existing(article, 'workflow.json'))
     records = state.get('completed')
     if (state.get('version') != 1 or not isinstance(records, list)
             or len(records) > len(STEPS) or type(state.get('revision')) is not int):
@@ -107,7 +109,7 @@ def body(path: Path) -> str:
 
 
 def sources(article: Path) -> list:
-    data = read_json(article / 'sources.json')
+    data = read_json(layout.existing(article, 'sources.json'))
     items = data.get('sources')
     if data.get('version') != 1 or not isinstance(items, list) or not items:
         raise ValueError('sources.json 需要 version: 1 和非空 sources 列表')
@@ -135,9 +137,9 @@ def sources(article: Path) -> list:
 def outline(article: Path) -> dict:
     """Validate the user-approved title and outline that gate the draft stage."""
     for name in ('outline.json', 'outline.md'):
-        if not (article / name).is_file():
+        if not layout.existing(article, name).is_file():
             raise ValueError(f'缺少 {name}；写正文前需给出三个备选标题与大纲，并取得用户确认')
-    data = read_json(article / 'outline.json')
+    data = read_json(layout.existing(article, 'outline.json'))
     if data.get('version') != 1:
         raise ValueError('outline.json 需要 version: 1')
     candidates = data.get('candidates')
@@ -167,8 +169,8 @@ def outline(article: Path) -> dict:
         raise ValueError('选定的标题不在备选清单中；用户自定义标题请使用 title_source: user')
     if data.get('approved') is not True:
         raise ValueError('标题与大纲尚未获得用户确认（approved: true）')
-    body(article / 'outline.md')
-    fingerprint = file_hash(article / 'outline.md')
+    body(layout.existing(article, 'outline.md'))
+    fingerprint = file_hash(layout.existing(article, 'outline.md'))
     if data.get('outline_hash') != fingerprint:
         raise ValueError('outline.md 在确认后发生变化，需要重新取得用户确认')
     return {'chosen_title': chosen, 'outline_hash': fingerprint}
@@ -185,7 +187,7 @@ def image_runtime():
 
 
 def requests(article: Path) -> list:
-    data = read_json(article / 'image-requests.json')
+    data = read_json(layout.existing(article, 'image-requests.json'))
     images = data.get('images')
     if not isinstance(images, list) or not images:
         raise ValueError('配图需求至少要有一项封面')
@@ -258,7 +260,7 @@ def note_parts(article: Path) -> dict:
 def image_proof(article: Path, request: dict) -> dict:
     from PIL import Image
     runtime = image_runtime()
-    report = read_json(article / 'image-results.json')
+    report = read_json(layout.existing(article, 'image-results.json'))
     if report.get('version') != 1 or not isinstance(report.get('images'), list):
         raise ValueError('image-results.json 格式不正确')
     matches = [item for item in report['images']
@@ -280,7 +282,7 @@ def image_proof(article: Path, request: dict) -> dict:
 
 
 def content_decision(article: Path, images: list) -> dict:
-    decision = read_json(article / 'content-images.json')
+    decision = read_json(layout.existing(article, 'content-images.json'))
     if type(decision.get('needed')) is not bool or not isinstance(decision.get('reason'), str) or not decision['reason'].strip():
         raise ValueError('content-images.json 需明确 needed 布尔值与非空 reason')
     content = [item for item in images if item['role'] == 'content']
@@ -290,7 +292,7 @@ def content_decision(article: Path, images: list) -> dict:
 
 
 def final_text(article: Path) -> str:
-    text = body(article / 'draft.md')
+    text = body(layout.existing(article, 'draft.md'))
     images = requests(article)
     content_decision(article, images)
     if platforms.for_state(load(article))['rendered_artifact'] is None:
@@ -317,33 +319,33 @@ def final_text(article: Path) -> str:
 def proof(article: Path, step: str) -> str:
     if step == 'search':
         sources(article)
-        return file_hash(article / 'sources.json')
+        return file_hash(layout.existing(article, 'sources.json'))
     if step == 'analysis':
-        text = body(article / 'analysis.md')
+        text = body(layout.existing(article, 'analysis.md'))
         references = re.findall(r'\bsource:([A-Za-z0-9_-]+)', text)
         ids = {item['id'] for item in sources(article)}
         if not references or not set(references).issubset(ids):
             raise ValueError('analysis.md 需用 source:<id> 关联已有来源，不能引用未知来源')
-        return file_hash(article / 'analysis.md')
+        return file_hash(layout.existing(article, 'analysis.md'))
     if step == 'draft':
-        text = body(article / 'draft.md')
+        text = body(layout.existing(article, 'draft.md'))
         if re.search(r'!\[[^\]]*\]\(', text):
             raise ValueError('draft.md 只保存正文，不嵌入图片；图片由最终步骤整合')
         state = load(article)
         extra = {}
         if platforms.for_state(state)['rendered_artifact'] is None:
             # 卡片稿是第三步产物：改文案必须让已渲染卡片与下游一起失效。
-            body(article / 'cards.md')
-            extra['cards'] = file_hash(article / 'cards.md')
+            body(layout.existing(article, 'cards.md'))
+            extra['cards'] = file_hash(layout.existing(article, 'cards.md'))
         if not outline_required(state):
             if not extra:
-                return file_hash(article / 'draft.md')
-            return digest({'draft': file_hash(article / 'draft.md'), **extra})
+                return file_hash(layout.existing(article, 'draft.md'))
+            return digest({'draft': file_hash(layout.existing(article, 'draft.md')), **extra})
         plan = outline(article)
         heading = text.splitlines()[0].strip()
         if heading != f"# {plan['chosen_title']}":
             raise ValueError('draft.md 的标题必须与用户确认的标题一致；换标题请先更新 outline.md 并重新确认')
-        return digest({'draft': file_hash(article / 'draft.md'),
+        return digest({'draft': file_hash(layout.existing(article, 'draft.md')),
                        'outline': plan['outline_hash'], 'title': plan['chosen_title'], **extra})
     if step == 'cover':
         cover = next(item for item in requests(article) if item['role'] == 'cover')
@@ -364,10 +366,10 @@ def proof(article: Path, step: str) -> str:
             raise ValueError(f'{name} 与当前正文/配图不一致，请重新 finalize')
         return file_hash(article / name)
     if step == 'format':
-        manifest = read_json(article / 'publish-manifest.json')
+        manifest = read_json(layout.existing(article, 'publish-manifest.json'))
         if manifest.get('version') != 1 or not isinstance(manifest.get('files'), dict):
             raise ValueError('publish-manifest.json 格式不正确')
-        return digest({'manifest': file_hash(article / 'publish-manifest.json'),
+        return digest({'manifest': file_hash(layout.existing(article, 'publish-manifest.json')),
                        'files': publishable_files(article)})
     raise ValueError(f'未知步骤：{step}')
 
@@ -380,8 +382,8 @@ def publishable_files(article: Path) -> dict:
     # (WeChat) or the first card of a set (Rednote).
     names.append(profile['cover']['output'])
     names.extend(item['output'] for item in requests(article) if item['role'] == 'content')
-    names.extend(name for name in profile['optional_artifacts'] if (article / name).exists())
-    return {name: file_hash(article / name) for name in dict.fromkeys(names)}
+    names.extend(name for name in profile['optional_artifacts'] if layout.existing(article, name).exists())
+    return {name: file_hash(layout.existing(article, name)) for name in dict.fromkeys(names)}
 
 
 def stale_step(article: Path, state: dict):
@@ -424,7 +426,7 @@ def complete(article: Path, step: str, reviewed: bool = False, note: str = '') -
         state['title'] = outline(article)['chosen_title']
     state['completed'].append({'step': step, 'proof': value, 'note': note.strip()})
     state['revision'] += 1
-    write_json(article / 'workflow.json', state)
+    write_json(layout.path(article, 'workflow.json'), state)
     return state
 
 
@@ -441,7 +443,7 @@ def finalize(article: Path) -> dict:
     output.write_text(text, encoding='utf-8')
     state['completed'].append({'step': 'markdown', 'proof': proof(article, 'markdown'), 'note': ''})
     state['revision'] += 1
-    write_json(article / 'workflow.json', state)
+    write_json(layout.path(article, 'workflow.json'), state)
     return state
 
 
@@ -452,7 +454,7 @@ def reset(article: Path, step: str) -> dict:
         raise ValueError('不能从尚未到达的步骤退回')
     state['completed'] = state['completed'][:index]
     state['revision'] += 1
-    write_json(article / 'workflow.json', state)
+    write_json(layout.path(article, 'workflow.json'), state)
     return state
 
 
@@ -620,21 +622,21 @@ def complete_format(article: Path, theme: str, preformat: bool, checks: dict) ->
             raise ValueError(f'步骤 {record["step"]} 已失效：{exc}；请 workflow reset <目录> --from {record["step"]}')
         if actual != record['proof']:
             raise ValueError(f'步骤 {record["step"]} 产物已变化；请 workflow reset <目录> --from {record["step"]}')
-    write_json(article / 'publish-manifest.json', build_manifest(article, state, theme, preformat, checks))
+    write_json(layout.path(article, 'publish-manifest.json'), build_manifest(article, state, theme, preformat, checks))
     record = {'step': 'format', 'proof': proof(article, 'format'), 'note': f'theme={theme}'}
     if redo:
         state['completed'][-1] = record
     else:
         state['completed'].append(record)
     state['revision'] += 1
-    write_json(article / 'workflow.json', state)
+    write_json(layout.path(article, 'workflow.json'), state)
     return state
 
 
 def require_publishable(article: Path) -> dict:
     """Publishing requires the exact artifact set recorded by the seventh stage."""
     state = require_finished(article)
-    manifest = read_json(article / 'publish-manifest.json')
+    manifest = read_json(layout.existing(article, 'publish-manifest.json'))
     if manifest.get('version') != 1 or not isinstance(manifest.get('files'), dict):
         raise ValueError('publish-manifest.json 格式不正确，请重新 format')
     if manifest.get('title') != state['title']:

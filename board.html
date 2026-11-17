@@ -15,11 +15,11 @@
   main { display: flex; height: calc(100vh - 53px); }
   aside { width: 360px; min-width: 300px; background: #fff; border-right: 1px solid #e3e6ea;
           display: flex; flex-direction: column; }
-  .filters { display: flex; gap: 6px; padding: 10px 12px; border-bottom: 1px solid #eef0f3; flex-wrap: wrap; }
+  .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 12px;
+             border-bottom: 1px solid #eef0f3; }
   .filters select, .filters input { font-size: 12px; padding: 4px 6px; border: 1px solid #d5dae1;
-          border-radius: 4px; background: #fff; color: #2c3e50; }
-  .filters select { flex: 1; }
-  .filters input[type="date"] { width: 128px; }
+          border-radius: 4px; background: #fff; color: #2c3e50; width: 100%; }
+  .filters select { grid-column: 1 / -1; }
   #task-list { flex: 1; overflow-y: auto; }
   .task { padding: 10px 14px; border-bottom: 1px solid #f0f2f5; cursor: pointer; border-left: 3px solid transparent; }
   .task:hover { background: #f7f9fc; }
@@ -29,6 +29,10 @@
   .badge { font-size: 11px; padding: 1px 7px; border-radius: 9px; background: #eef1f5; color: #5b6b7f; }
   .badge.wechat { background: #e6f7ec; color: #07914a; }
   .badge.rednote { background: #ffe9ec; color: #d81e37; }
+  .badge.overall-generating { background: #e8f1fb; color: #1a6db5; }
+  .badge.overall-pending-publish { background: #fff7e6; color: #ad6800; }
+  .badge.overall-published { background: #e6f7ec; color: #07914a; }
+  .badge.overall-ungenerated { background: #eef1f5; color: #5b6b7f; }
   .task-date { font-size: 11px; color: #98a2b3; margin-left: auto; }
   .bar-track { height: 4px; background: #edf0f3; border-radius: 2px; overflow: hidden; }
   .bar-fill { height: 100%; background: #1a6db5; border-radius: 2px; }
@@ -49,6 +53,10 @@
   #board-subtitle { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
   #board-subtitle .chip { font-size: 12px; background: #fff; border: 1px solid #e3e6ea;
                           padding: 3px 10px; border-radius: 12px; color: #5b6b7f; }
+  #board-subtitle .chip.overall-generating { background: #e8f1fb; border-color: #9ec5e8; color: #1a6db5; }
+  #board-subtitle .chip.overall-pending-publish { background: #fff7e6; border-color: #ffd591; color: #ad6800; }
+  #board-subtitle .chip.overall-published { background: #e6f7ec; border-color: #b7ebc9; color: #07914a; }
+  #board-subtitle .chip.overall-ungenerated { background: #eef1f5; border-color: #d5dae1; color: #5b6b7f; }
   .banner { font-size: 13px; padding: 8px 12px; border-radius: 6px; margin-bottom: 14px; }
   .banner.warn { background: #fff7e6; border: 1px solid #ffd591; color: #ad6800; }
   .banner.err { background: #fff1f0; border: 1px solid #ffa39e; color: #cf1322; }
@@ -98,7 +106,7 @@
         <option value="wechat">微信</option>
         <option value="rednote">小红书</option>
       </select>
-      <input type="date" id="date-from" title="创建日期起">
+      <input type="date" id="date-from" title="创建日期起" value="1990-01-01">
       <input type="date" id="date-to" title="创建日期止">
     </div>
     <div id="task-list"></div>
@@ -122,7 +130,12 @@
 </main>
 <script>
 'use strict';
-const state = { page: 1, platform: '', from: '', to: '', selected: null,
+const localToday = () => {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+const state = { page: 1, platform: '', from: '1990-01-01', to: localToday(), selected: null,
                 listJson: '', detailJson: '', busy: false };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
@@ -146,7 +159,7 @@ function taskQuery() {
 function statusText(item) {
   if (item.error) return `<span class="err">${esc(item.error)}</span>`;
   if (item.stale) return `<span class="warn">⚠ ${esc(item.stale)} 步产物已过期</span>`;
-  if (item.completed) return '<span class="ok">✓ 已完成，可发布</span>';
+  if (item.completed) return '<span class="ok">✓ 可发布</span>';
   return `${item.done}/${item.total} 步`;
 }
 
@@ -155,6 +168,7 @@ function renderList(data) {
     <div class="task ${item.name === state.selected ? 'selected' : ''}" data-name="${esc(item.name)}">
       <div class="task-title">${esc(item.title)}</div>
       <div class="task-meta">
+        <span class="badge overall-${esc(item.overall)}">${esc(item.overall_label)}</span>
         ${item.platform_label ? `<span class="badge ${esc(item.platform)}">${esc(item.platform_label)}</span>` : ''}
         ${item.perspective_label ? `<span class="badge">${esc(item.perspective_label)}</span>` : ''}
         <span class="task-date">${esc((item.created_at || '').slice(0, 10))}</span>
@@ -169,8 +183,8 @@ function renderList(data) {
 }
 
 function renderSteps(steps) {
-  $('steps').innerHTML = steps.map((step, index) => {
-    const mark = step.status === 'done' ? '✓' : step.status === 'stale' ? '!' : index + 1;
+  $('steps').innerHTML = steps.map((step) => {
+    const mark = step.status === 'done' ? '✓' : step.status === 'stale' ? '!' : (step.mark || step.ordinal);
     const tip = step.note ? ` title="${esc(step.note)}"` : '';
     return `<div class="step ${step.status}"${tip}>
       <div class="dot">${mark}</div><div class="step-label">${esc(step.label)}</div></div>`;
@@ -219,10 +233,12 @@ function renderDetail(detail) {
   $('board').hidden = false;
   $('board-title').textContent = detail.title;
   $('board-subtitle').innerHTML = [
+    detail.overall_label && `状态：${detail.overall_label}`,
     detail.platform_label && `平台：${detail.platform_label}`,
     detail.topic && `主题：${detail.topic}`,
     detail.perspective_label && `视角：${detail.perspective_label}`,
-  ].filter(Boolean).map((text) => `<span class="chip">${esc(text)}</span>`).join('');
+  ].filter(Boolean).map((text, index) =>
+    `<span class="chip${index === 0 ? ' overall-' + esc(detail.overall) : ''}">${esc(text)}</span>`).join('');
   const banner = $('board-banner');
   if (detail.error) banner.innerHTML = `<div class="banner err">${esc(detail.error)}</div>`;
   else if (detail.stale) banner.innerHTML =
@@ -298,6 +314,8 @@ $('date-to').addEventListener('change', (event) => {
   state.to = event.target.value; state.page = 1; state.listJson = ''; tick();
 });
 
+$('date-from').value = state.from;
+$('date-to').value = state.to;
 tick();
 setInterval(tick, 2000);
 </script>

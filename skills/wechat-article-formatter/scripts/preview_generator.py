@@ -16,6 +16,8 @@ import webbrowser
 
 from markdown_to_html import convert_markdown
 
+import layout
+
 
 class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
     """静默的 HTTP 请求处理器（不打印访问日志）。"""
@@ -25,7 +27,7 @@ class QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
 
 
 def convert_once(input_path: Path, output_file: Path, theme: str) -> None:
-    closing_path = input_path.parent / 'closing.md'
+    closing_path = layout.existing(input_path.parent, 'closing.md')
     closing_md = closing_path.read_text(encoding='utf-8') if closing_path.exists() else None
     html = convert_markdown(input_path.read_text(encoding='utf-8'), theme, closing_md=closing_md)
     output_file.parent.mkdir(parents=True, exist_ok=True)

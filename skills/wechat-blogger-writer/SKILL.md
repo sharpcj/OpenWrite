@@ -58,6 +58,6 @@ description: 从自媒体博主视角创作微信公众号文章，研究主题�
 
 由项目控制器运行 `workflow finalize`，根据 `draft.md` 和已验收的图片整合生成 `article.md`。不另行编写一份绕过状态检查的最终正文。
 
-### 步骤 7：排版并保存可发布产物
+### 步骤 7：生成可发布交付件
 
 运行 `python3 openwrite.py format <目录> --theme default`，由项目入口调用排版能力生成 `article.html`，执行可发布性检查（标题/作者/摘要长度、封面格式与大小、代码块转换、本地图片齐备），写入 `publish-manifest.json` 并自动完成第七步。检查不通过时保留上一次成功的 HTML。七步完成即交付可发布产物；上传草稿仍需用户明确确认。

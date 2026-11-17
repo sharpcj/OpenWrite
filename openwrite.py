@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Project-local command entry for the OpenWrite article workspace."""
 from __future__ import annotations
+import layout
 
 import argparse
 import importlib.util
 import json
+from datetime import datetime
 from pathlib import Path
 import re
 import subprocess
@@ -55,16 +57,16 @@ def new_article(args: argparse.Namespace) -> int:
     perspective = preferences.PERSPECTIVE_LABELS[selection['perspective']]
     platform_label = preferences.PLATFORM_LABELS[selection['platform']]
     checkpoint = outline_checkpoint(args)
-    (directory / 'brief.md').write_text(
+    (layout.path(directory, 'brief.md')).write_text(
         f'# 创作需求\n\n- 主题：{title}\n- 平台：{platform_label}\n- 视角：{perspective}\n'
         f'- 标题与大纲确认：{"需要用户确认" if checkpoint else "用户已授权跳过"}\n'
         '- 受众：待根据任务补充\n- 当前阶段：工作区已创建，正文待写\n'
         '\n## 用户要求\n\n## 资料与事实依据\n\n## 配图提示词与待办\n',
         encoding='utf-8',
     )
-    (directory / 'draft.md').write_text(f'# {title}\n', encoding='utf-8')
-    (directory / 'analysis.md').write_text('# 资料分析\n', encoding='utf-8')
-    workflow.write_json(directory / 'sources.json', {'version': 1, 'sources': []})
+    (layout.path(directory, 'draft.md')).write_text(f'# {title}\n', encoding='utf-8')
+    (layout.path(directory, 'analysis.md')).write_text('# 资料分析\n', encoding='utf-8')
+    workflow.write_json(layout.path(directory, 'sources.json'), {'version': 1, 'sources': []})
     workflow.initialize(directory, title, selection['perspective'], selection['platform'],
                         selection['selection_source'], checkpoint, cover)
     print(f'已创建文章工作区：{directory}')
@@ -153,7 +155,7 @@ def format_article(args: argparse.Namespace) -> int:
         output.write_text(staged.read_text(encoding='utf-8'), encoding='utf-8')
     workflow.complete_format(directory, args.theme, not args.no_preformat, checks)
     print(f'已完成排版并保存可发布产物：{output}')
-    print(f'发布清单：{directory / "publish-manifest.json"}（标题：{state["title"]}；主题：{args.theme}）')
+    print(f'发布清单：{layout.existing(directory, "publish-manifest.json")}（标题：{state["title"]}；主题：{args.theme}）')
     print('七步写作已完成；上传草稿仍需用户明确确认。')
     return 0
 
@@ -161,19 +163,27 @@ def format_article(args: argparse.Namespace) -> int:
 def assemble_card_set(directory: Path, state: dict, profile: dict) -> int:
     """组图平台第七步：卡片已在第 4/5 步渲染，这里只组装、校验并写清单。"""
     checks = workflow.check_publishable(directory, state)
-    requests = workflow.read_json(directory / 'image-requests.json')['images']
+    requests = workflow.read_json(layout.existing(directory, 'image-requests.json'))['images']
     cover = next(item for item in requests if item['role'] == 'cover')
     theme = (cover.get('card') or {}).get('theme', 'default')
     workflow.complete_format(directory, theme, False, checks)
-    manifest = workflow.read_json(directory / 'publish-manifest.json')
+    manifest = workflow.read_json(layout.existing(directory, 'publish-manifest.json'))
     print(f'已组装可发布产物：{len(manifest["images"])} 张卡片 + 笔记文案（主题：{theme}）')
-    print(f'发布清单：{directory / "publish-manifest.json"}（标题：{manifest["title"]}；'
+    print(f'发布清单：{layout.existing(directory, "publish-manifest.json")}（标题：{manifest["title"]}；'
           f'话题：{"、".join(manifest["topics"]) or "无"}）')
     if profile.get('publish_implemented'):
         print('七步写作已完成；上传仍需用户明确确认。')
     else:
         print(f'七步写作已完成；{profile["label"]}上传适配器尚未实现，请手动发布。')
     return 0
+
+
+def record_publish(directory: Path, platform: str, title: str, visibility: str) -> None:
+    """发布成功后的落盘记录，供看板等只读消费方判定「已发布」。"""
+    workflow.write_json(layout.path(directory, 'publish-record.json'), {
+        'version': 1, 'platform': platform, 'title': title, 'visibility': visibility,
+        'published_at': datetime.now().astimezone().isoformat(timespec='seconds'),
+    })
 
 
 def publish_article(args: argparse.Namespace) -> int:
@@ -199,7 +209,10 @@ def publish_article(args: argparse.Namespace) -> int:
         arguments.extend(['--author', author])
     if digest:
         arguments.extend(['--digest', digest])
-    return run_skill(profile['publisher'], profile['publisher_entry'], *arguments)
+    code = run_skill(profile['publisher'], profile['publisher_entry'], *arguments)
+    if code == 0:
+        record_publish(directory, workflow.load(directory)['platform'], title, 'draft')
+    return code
 
 
 def publish_card_set(args: argparse.Namespace, directory: Path, manifest: dict, profile: dict) -> int:
@@ -219,7 +232,11 @@ def publish_card_set(args: argparse.Namespace, directory: Path, manifest: dict, 
         arguments.append('--dry-run')
     if args.headed:
         arguments.append('--headed')
-    return run_skill(profile['publisher'], profile['publisher_entry'], *arguments)
+    code = run_skill(profile['publisher'], profile['publisher_entry'], *arguments)
+    if code == 0 and not args.dry_run:
+        record_publish(directory, manifest['platform'], args.title or manifest['title'],
+                       'public' if args.public else 'private')
+    return code
 
 
 def image_article(args: argparse.Namespace) -> int:
@@ -259,13 +276,17 @@ def workflow_command(args: argparse.Namespace) -> int:
         updated.update({key: value for key, value in changes.items() if value is not None})
         state['cover_style'] = preferences.validate_cover_style(updated)
         state['revision'] += 1
-        workflow.write_json(directory / 'workflow.json', state)
+        workflow.write_json(layout.path(directory, 'workflow.json'), state)
     elif args.operation == 'complete':
         workflow.complete(directory, args.step, args.reviewed, args.note or '')
     elif args.operation == 'reset':
         workflow.reset(directory, args.from_step)
     elif args.operation == 'finalize':
         workflow.finalize(directory)
+    elif args.operation == 'migrate':
+        moved = layout.migrate(directory)
+        print('已迁移：' + ('、'.join(moved) if moved else '无需迁移（已是分层布局）'))
+        return 0
     state = workflow.load(directory)
     platform = preferences.task_platform(state)
     perspective = preferences.task_perspective(state)
@@ -420,7 +441,7 @@ def main(argv: list[str] | None = None) -> int:
     new.set_defaults(action=new_article)
     flow = commands.add_parser('workflow', help='查看、推进或退回七步创作流程')
     operations = flow.add_subparsers(dest='operation', required=True)
-    for operation in ('init', 'status', 'complete', 'reset', 'finalize', 'cover-style'):
+    for operation in ('init', 'status', 'complete', 'reset', 'finalize', 'cover-style', 'migrate'):
         command = operations.add_parser(operation)
         command.add_argument('article', help='文章目录')
         command.set_defaults(action=workflow_command)

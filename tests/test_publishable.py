@@ -1,4 +1,5 @@
 """Seventh stage: publishable checks, manifest fingerprints and publish gating."""
+import layout
 from argparse import Namespace
 import importlib.util
 from pathlib import Path
@@ -73,7 +74,7 @@ class PublishableTests(unittest.TestCase):
         (self.article / 'article.html').write_text('<p>正文</p>', encoding='utf-8')
         state = workflow.complete_format(self.article, 'default', True, {'html_chars': 12})
         self.assertIsNone(workflow.current(state))
-        manifest = workflow.read_json(self.article / 'publish-manifest.json')
+        manifest = workflow.read_json(layout.path(self.article, 'publish-manifest.json'))
         self.assertEqual((manifest['title'], manifest['theme'], manifest['preformat']), ('测试文章', 'default', True))
         self.assertIn('article.html', manifest['files'])
         self.assertIn('cover.png', manifest['files'])
@@ -83,7 +84,7 @@ class PublishableTests(unittest.TestCase):
         state = workflow.complete_format(self.article, 'grace', False, {})
         self.assertEqual(len(state['completed']), len(workflow.STEPS))
         self.assertEqual(state['completed'][-1]['step'], 'format')
-        manifest = workflow.read_json(self.article / 'publish-manifest.json')
+        manifest = workflow.read_json(layout.path(self.article, 'publish-manifest.json'))
         self.assertEqual((manifest['theme'], manifest['preformat']), ('grace', False))
         workflow.require_publishable(self.article)
 

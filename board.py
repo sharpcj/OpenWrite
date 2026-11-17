@@ -1,14 +1,18 @@
 """Read-only real-time storyboard over article workspaces.
 
 Left pane: paginated task list (created date desc, date-range and platform
-filters). Right pane: the selected task's creation board — title, subtitle
-(platform / topic / perspective), seven-step progress, and deliverable
-thumbnails once the task is complete.
+filters), each task badged with its overall lifecycle state (ungenerated /
+generating / pending-publish / published); the seven writing steps all count
+as generating. Right pane: the selected task's creation board — title,
+subtitle (overall state / platform / topic / perspective), seven-step
+progress plus direction and publish nodes, and deliverable thumbnails once
+the task is complete.
 
 Aggregates existing files only; never writes workflow state and never reads
 credentials. Standard library only; the browser polls for live updates.
 """
 from __future__ import annotations
+import layout
 
 from datetime import datetime
 from functools import partial
@@ -43,7 +47,7 @@ def task_created(state: dict, path: Path) -> str:
 
 def brief_topic(article: Path) -> str:
     try:
-        text = (article / 'brief.md').read_text(encoding='utf-8')
+        text = (layout.existing(article, 'brief.md')).read_text(encoding='utf-8')
     except OSError:
         return ''
     match = re.search(r'(?m)^-\s*主题[:：]\s*(.+)$', text)
@@ -54,8 +58,9 @@ def summarize(article: Path) -> dict:
     summary = {'name': article.name, 'title': article.name, 'platform': '', 'platform_label': '',
                'perspective': '', 'perspective_label': '', 'topic': '', 'created_at': '',
                'done': 0, 'total': len(workflow.STEPS), 'completed': False,
-               'stale': None, 'error': None}
-    path = article / 'workflow.json'
+               'stale': None, 'error': None,
+               'overall': 'ungenerated', 'overall_label': '未生成'}
+    path = layout.existing(article, 'workflow.json')
     if not path.is_file():
         summary['error'] = '未初始化工作流'
         summary['created_at'] = task_created({}, article)
@@ -84,6 +89,12 @@ def summarize(article: Path) -> dict:
         summary['stale'] = stale[0] if stale else None
     except (OSError, ValueError):
         summary['stale'] = None
+    if publish_record(article):
+        summary['overall'], summary['overall_label'] = 'published', '已发布'
+    elif summary['completed']:
+        summary['overall'], summary['overall_label'] = 'pending-publish', '待发布'
+    else:
+        summary['overall'], summary['overall_label'] = 'generating', '生成中'
     return summary
 
 
@@ -145,6 +156,15 @@ def deliverables(article: Path, state: dict) -> dict:
     return result
 
 
+def publish_record(article: Path):
+    """发布记录存在且带时间戳才视为已发布；损坏或缺失一律不算。"""
+    try:
+        record = workflow.read_json(layout.existing(article, 'publish-record.json'))
+    except (OSError, ValueError):
+        return None
+    return record if isinstance(record, dict) and record.get('published_at') else None
+
+
 def task_detail(root: Path, name: str) -> dict:
     if not NAME_PATTERN.fullmatch(name):
         raise ValueError('非法文章目录名')
@@ -154,12 +174,22 @@ def task_detail(root: Path, name: str) -> dict:
     detail = dict(summarize(article))
     detail['steps'] = []
     detail['deliverables'] = None
+    direction = {'step': 'direction', 'label': '制定写作方向', 'mark': '✎', 'note': ''}
+    published = {'step': 'published', 'label': '已发布', 'mark': '□', 'note': ''}
     if detail['error']:
+        direction['status'] = 'current'
+        published['status'] = 'pending'
+        detail['steps'] = [direction] + [
+            {'step': step, 'label': label, 'status': 'pending', 'ordinal': index + 1, 'note': ''}
+            for index, (step, label) in enumerate(zip(workflow.STEPS, workflow.LABELS))]
+        detail['steps'].append(published)
         return detail
     state = workflow.load(article)
     labels = platforms.step_labels(state)
     done = len(state['completed'])
     stale_index = workflow.STEPS.index(detail['stale']) if detail['stale'] else None
+    direction['status'] = 'done'
+    detail['steps'].append(direction)
     for index, (step, label) in enumerate(zip(workflow.STEPS, labels)):
         record = state['completed'][index] if index < done else None
         if record is None:
@@ -169,7 +199,18 @@ def task_detail(root: Path, name: str) -> dict:
         else:
             status = 'done'
         detail['steps'].append({'step': step, 'label': label, 'status': status,
-                                'note': (record or {}).get('note', '')})
+                                'ordinal': index + 1, 'note': (record or {}).get('note', '')})
+    record = publish_record(article)
+    if record:
+        published['status'] = 'done'
+        visibility = {'draft': '微信草稿箱', 'private': '仅自己可见', 'public': '公开'}.get(
+            record.get('visibility'), record.get('visibility') or '')
+        published['note'] = f"{record['published_at']} · {visibility}".strip(' ·')
+    elif detail['completed'] and not detail['stale']:
+        published['status'] = 'current'
+    else:
+        published['status'] = 'pending'
+    detail['steps'].append(published)
     if detail['completed']:
         detail['deliverables'] = deliverables(article, state)
     return detail

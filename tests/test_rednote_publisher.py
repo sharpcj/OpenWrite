@@ -169,7 +169,7 @@ class PublishCliTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix='openwrite-rednote-cli-')
         self.addCleanup(self.tmp.cleanup)
         self.project = Path(self.tmp.name).resolve()
-        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py'):
+        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py'):
             shutil.copy2(ROOT / name, self.project / name)
         shutil.copytree(ROOT / 'skills', self.project / 'skills')
         (self.project / '.env').write_text(
