@@ -161,17 +161,14 @@ def _preformat_markdown(text: str) -> str:
     text = re.sub(r"([\u4e00-\u9fff])(\d)", r"\1 \2", text)
     text = re.sub(r"(\d)([\u4e00-\u9fff])", r"\1 \2", text)
 
-    # ASCII 引号 → 中文引号
-    text = text.replace('"', '\u300c')
-    # Simple heuristic: pair them up
-    parts = text.split('\u300c')
-    result = parts[0]
-    for i, part in enumerate(parts[1:], 1):
-        if i % 2 == 1:
-            result += '\u300c' + part
-        else:
-            result += '\u300d' + part
-    text = result
+    # ASCII 引号 → 中文引号：只转换代码区外成对的 ASCII 双引号。
+    # 不触碰正文已有的中文引号（「」『』“”等），避免按奇偶重配对时
+    # 把既有开引号翻成闭引号；代码块与行内代码中的引号保持原样。
+    code_region = re.compile(r"(```.*?(?:```|\Z)|`[^`\n]+`)", re.S)
+    segments = code_region.split(text)
+    for i in range(0, len(segments), 2):
+        segments[i] = re.sub(r'"([^"\n]*)"', '\u300c\\1\u300d', segments[i])
+    text = ''.join(segments)
 
     # 连续多个空行 → 最多两个
     text = re.sub(r"\n{3,}", "\n\n", text)

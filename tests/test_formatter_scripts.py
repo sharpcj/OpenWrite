@@ -126,5 +126,32 @@ class PreviewTests(unittest.TestCase):
             watcher.join(timeout=5)
 
 
+class PreformatQuoteTests(unittest.TestCase):
+    """回归：既有中文引号不得被奇偶配对 heuristic 翻转。"""
+
+    def test_existing_corner_brackets_stay_paired(self):
+        text = '弹窗来了：「开通会员」。两个「剪映平替」：「免费」与「开源」。\n'
+        self.assertEqual(core._preformat_markdown(text), text)
+
+    def test_ascii_paired_quotes_convert_to_corner_brackets(self):
+        self.assertEqual(core._preformat_markdown('他说"你好"吗'), '他说「你好」吗')
+
+    def test_mixed_existing_and_ascii_quotes_pair_independently(self):
+        text = '已有「甲」与「乙」，再加"丙"和"丁"。'
+        self.assertEqual(core._preformat_markdown(text), '已有「甲」与「乙」，再加「丙」和「丁」。')
+
+    def test_quotes_inside_code_are_untouched(self):
+        text = '命令 `echo "hi"` 如下：\n\n```bash\necho "hi"\n```\n'
+        self.assertEqual(core._preformat_markdown(text), text)
+
+    def test_unpaired_ascii_quote_is_left_alone(self):
+        text = '只有一个"引号，不成对。'
+        self.assertEqual(core._preformat_markdown(text), text)
+
+    def test_curly_quotes_are_untouched(self):
+        text = '“弯引号”与‘单弯引号’保持原样。'
+        self.assertEqual(core._preformat_markdown(text), text)
+
+
 if __name__ == '__main__':
     unittest.main()
