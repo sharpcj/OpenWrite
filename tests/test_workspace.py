@@ -13,6 +13,8 @@ from argparse import Namespace
 
 import workflow
 from workflow_fixtures import finish_article
+import os
+os.environ['OPENWRITE_BOARD_AUTO'] = '0'  # 测试不得拉起真实看板或弹浏览器
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('openwrite_workspace', ROOT / 'openwrite.py')

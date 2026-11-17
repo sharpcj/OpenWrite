@@ -76,7 +76,7 @@ python3 openwrite.py format articles/my-topic --theme default
 python3 openwrite.py publish articles/my-topic --title "文章标题"
 ```
 
-`doctor` 不联网，不确认 ComfyUI 在线或微信凭证有效。`publish` 会实际调用微信 API，只有用户要求上传草稿时才执行。`board` 启动本地只读实时故事板（左侧任务列表分页/过滤，右侧选中任务的七步进展与交付件缩略图），用于观察创作进度，不参与状态推进。
+`doctor` 不联网，不确认 ComfyUI 在线或微信凭证有效。`publish` 会实际调用微信 API，只有用户要求上传草稿时才执行。`board` 启动本地只读实时故事板（左侧任务列表分页/过滤，右侧选中任务的七步进展与交付件缩略图），用于观察创作进度，不参与状态推进。`new` / `workflow init` 成功后自动后台拉起看板并打开默认浏览器（`OPENWRITE_BOARD_AUTO=0` 关闭；已运行则复用），`board --stop` 停止后台进程。
 
 默认排版器会对全文进行中英文间距和引号预处理，包括代码示例。需要保留原文时用 `format --no-preformat`。项目入口自动执行微信代码块兼容转换。
 

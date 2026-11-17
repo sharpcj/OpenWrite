@@ -17,8 +17,14 @@ import layout
 from datetime import datetime
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+import os
 from pathlib import Path
 import re
+import signal
+import subprocess
+import sys
+import tempfile
 from urllib.parse import parse_qs, unquote, urlparse
 import webbrowser
 
@@ -278,8 +284,16 @@ class BoardHandler(BaseHTTPRequestHandler):
 
 
 def serve(root: Path, port: int = 8765, open_browser: bool = True) -> None:
-    server = ThreadingHTTPServer(('127.0.0.1', port), partial(BoardHandler, root=root))
+    try:
+        server = ThreadingHTTPServer(('127.0.0.1', port), partial(BoardHandler, root=root))
+    except OSError:
+        if board_alive(port):
+            print(f'端口 {port} 已有看板运行，复用现有实例，不重复启动')
+            return
+        raise
     url = f'http://127.0.0.1:{server.server_address[1]}'
+    pid_file = _pid_file(port)
+    pid_file.write_text(str(os.getpid()), encoding='utf-8')
     print(f'实时故事板已启动：{url}（只读，不修改任何任务状态；Ctrl+C 停止）')
     if open_browser:
         webbrowser.open(url)
@@ -289,3 +303,67 @@ def serve(root: Path, port: int = 8765, open_browser: bool = True) -> None:
         print('\n故事板已停止')
     finally:
         server.server_close()
+        if pid_file.is_file() and pid_file.read_text(encoding='utf-8').strip() == str(os.getpid()):
+            pid_file.unlink(missing_ok=True)
+
+
+def _pid_file(port: int) -> Path:
+    return Path(tempfile.gettempdir()) / f'openwrite-board-{port}.pid'
+
+
+def board_alive(port: int = 8765, timeout: float = 1.0) -> bool:
+    """Probe the JSON API so a foreign process on the port is not mistaken for us."""
+    from urllib.request import urlopen
+    try:
+        with urlopen(f'http://127.0.0.1:{port}/api/tasks', timeout=timeout) as response:
+            return 'items' in json.loads(response.read())
+    except (OSError, ValueError):
+        return False
+
+
+def stop_board(port: int = 8765) -> bool:
+    pid_file = _pid_file(port)
+    if not pid_file.is_file():
+        return False
+    try:
+        pid = int(pid_file.read_text(encoding='utf-8').strip())
+        os.kill(pid, signal.SIGTERM)
+    except (OSError, ValueError):
+        return False
+    finally:
+        pid_file.unlink(missing_ok=True)
+    return True
+
+
+def ensure_board(port: int = 8765, open_browser: bool = True):
+    """Start the board detached if absent; reuse a live one. Returns (url, started).
+
+    A per-port file lock serializes probe+spawn so concurrent task starts never
+    leave two live servers: the loser of a bind race exits gracefully in serve()
+    and this call reports reuse. The winning child opens the browser itself.
+    """
+    import fcntl
+    import time
+    url = f'http://127.0.0.1:{port}'
+    lock_path = Path(tempfile.gettempdir()) / f'openwrite-board-{port}.lock'
+    with open(lock_path, 'a+') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if board_alive(port):
+            if open_browser:
+                webbrowser.open(url)
+            return url, False
+        log = Path(tempfile.gettempdir()) / f'openwrite-board-{port}.log'
+        with open(log, 'ab') as handle:
+            process = subprocess.Popen(
+                [sys.executable, str(ROOT / 'openwrite.py'), 'board', '--port', str(port)],
+                stdout=handle, stderr=handle, start_new_session=True)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if board_alive(port, timeout=0.5):
+                break
+            if process.poll() is not None:
+                break
+            time.sleep(0.1)
+        if not board_alive(port, timeout=0.5):
+            raise RuntimeError(f'看板启动失败，详见日志：{log}')
+        return url, process.poll() is None

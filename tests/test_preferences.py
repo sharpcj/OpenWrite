@@ -9,6 +9,8 @@ import tempfile
 import unittest
 
 import preferences
+import os
+os.environ['OPENWRITE_BOARD_AUTO'] = '0'  # 测试不得拉起真实看板或弹浏览器
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULTS = 'WeChat=true\nRednote=false\nWriterRole=SelfMediaBlogger\n'

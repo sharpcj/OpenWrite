@@ -227,5 +227,53 @@ class BoardHttpTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(), before)
 
 
+class AutoStartTests(unittest.TestCase):
+    def _free_port(self):
+        import socket
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1', 0))
+            return sock.getsockname()[1]
+
+    def test_stop_without_running_board_reports_false(self):
+        self.assertFalse(board.stop_board(self._free_port()))
+
+    def test_ensure_board_starts_detached_and_stop_terminates(self):
+        import time
+        port = self._free_port()
+        url, started = board.ensure_board(port, open_browser=False)
+        self.assertTrue(started)
+        self.assertEqual(url, f'http://127.0.0.1:{port}')
+        deadline = time.monotonic() + 10
+        while not board.board_alive(port) and time.monotonic() < deadline:
+            time.sleep(0.2)
+        self.assertTrue(board.board_alive(port))
+        url2, started2 = board.ensure_board(port, open_browser=False)
+        self.assertFalse(started2)  # 复用存活实例，不重复拉起
+        self.assertTrue(board.stop_board(port))
+        deadline = time.monotonic() + 5
+        while board.board_alive(port) and time.monotonic() < deadline:
+            time.sleep(0.2)
+        self.assertFalse(board.board_alive(port))
+
+
+    def test_concurrent_ensure_keeps_single_instance(self):
+        import concurrent.futures
+        import subprocess
+        import sys
+        port = self._free_port()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: board.ensure_board(port, open_browser=False), range(2)))
+        self.assertEqual(sorted(started for _, started in results), [False, True])
+        self.assertTrue(board.board_alive(port))
+        # 占用端口上再手动 serve：优雅复用并退出 0，不产生第二个服务
+        proc = subprocess.run([sys.executable, str(ROOT / 'openwrite.py'), 'board',
+                               '--port', str(port), '--no-browser'],
+                              capture_output=True, text=True, timeout=15)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn('复用', proc.stdout)
+        self.assertTrue(board.board_alive(port))
+        self.assertTrue(board.stop_board(port))
+
+
 if __name__ == '__main__':
     unittest.main()
