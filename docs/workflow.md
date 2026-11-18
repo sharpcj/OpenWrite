@@ -2,7 +2,7 @@
 
 项目入口用 `workflow/workflow.json` 保存进度并检查阶段产物。Agent 完成当前阶段的工作后提交结果，由代码检查并推进。它不自动调用大模型，也不自动判断论据或图片是否足够好。
 
-本文维护阶段命令与文件协议；Agent 决策规则从 [Agent 指南](../AGENT_GUIDE.md) 开始，安装、凭证和命令环境见 [环境与运行](setup.md)。下文 `python3` 指已安装项目依赖的解释器。
+本文维护阶段命令与文件协议；Agent 决策规则从 [Agent 指南](../AGENT_GUIDE.md) 开始，安装、凭证和命令环境见 [环境与运行](setup.md)。下文 `.venv/bin/python` 指已安装项目依赖的虚拟环境解释器。
 
 整体分三个模块：**下发需求 → 写作 → 发布**。写作即下面的七步，最终交付可发布产物；发布必须由用户明确确认。
 
@@ -28,11 +28,11 @@
 
 ## 初始化与查看
 
-新任务及 `workflow init` 按 [平台与视角规则](task-selection.md) 只读取本地 `.env`（`.env.example` 仅是 `setup` 用的模板）；提示词明确指定值由 Agent 转为参数。模板默认启用微信与自媒体博主；没有 `.env` 时平台没有默认项。已保存任务继续沿用原选择。小红书已完整接入（写作、卡片产物与发布）；任务按图文形态推进，不会套用微信长文规则。
+新任务及 `workflow init` 按 [平台与视角规则](task-selection.md) 只读取本地 `openwrite.yaml`（`openwrite.example.yaml` 仅是 `setup` 用的模板）；提示词明确指定值由 Agent 转为参数。模板默认启用微信与自媒体博主；没有 `openwrite.yaml` 时平台没有默认项。账号按 **显式 `--account` > 平台唯一账号 > `default_account` > 询问用户** 选择，选定的账号写入任务 `workflow.json` 的 `account` 字段。已保存任务继续沿用原选择。小红书已完整接入（写作、卡片产物与发布）；任务按图文形态推进，不会套用微信长文规则。
 
 ```bash
-python3 openwrite.py new rag-guide --title "RAG 入门" --perspective tech
-python3 openwrite.py workflow status articles/rag-guide
+.venv/bin/python openwrite.py new rag-guide --title "RAG 入门" --perspective tech
+.venv/bin/python openwrite.py workflow status articles/rag-guide
 ```
 
 `new` 创建需求文件、空来源清单、分析与正文标题草稿及工作流状态，**不会提前创建最终 `article.md`**。更换 Agent 或会话后，先运行 `status` 并阅读当前产物。
@@ -66,8 +66,8 @@ python3 openwrite.py workflow status articles/rag-guide
 分析写入 `process/analysis.md`，例如“source:s1 支持……；尚未确认……；文章核心观点为……”。
 
 ```bash
-python3 openwrite.py workflow complete articles/rag-guide --step search
-python3 openwrite.py workflow complete articles/rag-guide --step analysis
+.venv/bin/python openwrite.py workflow complete articles/rag-guide --step search
+.venv/bin/python openwrite.py workflow complete articles/rag-guide --step analysis
 ```
 
 不允许跳步、重复提交已完成步骤，或以只有标题的文件通过检查。
@@ -123,7 +123,7 @@ python3 openwrite.py workflow complete articles/rag-guide --step analysis
 
 提交 `draft` 时选定标题会同步到 `workflow/workflow.json` 的 `title`，供排版与发布使用。确认后修改 `process/outline.md` 会使确认失效，并让已完成的正文及下游过期。
 
-是否启用由 `.env` 的 `OutlineApproval` 控制（默认 `true`）；用户明确授权跳过时可传 `new --skip-outline` 或 `workflow init --skip-outline`。选择在创建任务时写入 `outline_approval`，之后修改配置不影响已有任务。旧任务没有该字段时不追加此要求。
+是否启用由 `openwrite.yaml` 的 `defaults.outline_approval` 控制（默认 `true`，微信账号可在 `accounts.<账号名>` 下逐项覆盖）；用户明确授权跳过时可传 `new --skip-outline` 或 `workflow init --skip-outline`。选择在创建任务时写入 `outline_approval`，之后修改配置不影响已有任务。旧任务没有该字段时不追加此要求。
 
 ## 封面与正文配图
 
@@ -131,9 +131,9 @@ python3 openwrite.py workflow complete articles/rag-guide --step analysis
 
 ```bash
 # 当前步骤必须是 cover；也可以用已配置的其他后端
-python3 openwrite.py image articles/rag-guide --id cover --backend file --source /path/to/cover.png
+.venv/bin/python openwrite.py image articles/rag-guide --id cover --backend file --source /path/to/cover.png
 # 实际看图并确认主题、文字、色调、构图等符合要求后提交
-python3 openwrite.py workflow complete articles/rag-guide --step cover --reviewed --note "已检查标题、构图和正文主题一致"
+.venv/bin/python openwrite.py workflow complete articles/rag-guide --step cover --reviewed --note "已检查标题、构图和正文主题一致"
 ```
 
 正文配图必须明确做出决策。**微信**无须配图时，保存 `workflow/content-images.json`：
@@ -145,7 +145,7 @@ python3 openwrite.py workflow complete articles/rag-guide --step cover --reviewe
 同时 `workflow/image-requests.json` 不应有正文图片项，再提交：
 
 ```bash
-python3 openwrite.py workflow complete articles/rag-guide --step content
+.venv/bin/python openwrite.py workflow complete articles/rag-guide --step content
 ```
 
 需要配图时，使用 `needed: true` 并说明理由，将正文图片需求追加到清单，逐项获取后提交 `--reviewed --note "验收说明"`。微信 `placement` 必须完整且唯一地匹配 `process/draft.md` 中的某一行标题或段落（也可用完整的多行段落）；程序在它后面插图。不要使用“第二部分附近”这样的模糊描述。
@@ -159,8 +159,8 @@ python3 openwrite.py workflow complete articles/rag-guide --step content
 ## 生成 Markdown 与可发布产物
 
 ```bash
-python3 openwrite.py workflow finalize articles/rag-guide
-python3 openwrite.py format articles/rag-guide --theme default
+.venv/bin/python openwrite.py workflow finalize articles/rag-guide
+.venv/bin/python openwrite.py format articles/rag-guide --theme default
 # 保留正文和代码的原始引号、间距可加 --no-preformat
 ```
 
@@ -179,7 +179,7 @@ python3 openwrite.py format articles/rag-guide --theme default
   "version": 1,
   "platform": "wechat",
   "title": "RAG 如何提升 AI 回答的准确性",
-  "author": "来自 .env 的 WeChatAuthor",
+  "author": "来自 openwrite.yaml 任务账号的 author",
   "digest": "",
   "theme": "default",
   "preformat": true,
@@ -196,10 +196,10 @@ python3 openwrite.py format articles/rag-guide --theme default
 
 ```bash
 # 只有用户明确确认发布时执行
-python3 openwrite.py publish articles/rag-guide
+.venv/bin/python openwrite.py publish articles/rag-guide
 ```
 
-`publish` 要求七步完成，且 `workflow/publish-manifest.json` 记录的指纹与当前产物完全一致；标题默认取清单中已确认的值，`--title` / `--author` / `--digest` 可显式覆盖。产物在确认后被修改时旧确认失效，必须重新排版并重新取得用户确认。凭证配置与缓存位置见 [环境与运行](setup.md#配置与凭证)。微信未配置凭证时在调用 API 之前报错。
+`publish` 要求七步完成，且 `workflow/publish-manifest.json` 记录的指纹与当前产物完全一致；标题默认取清单中已确认的值，`--title` / `--author` / `--digest` 可显式覆盖。产物在确认后被修改时旧确认失效，必须重新排版并重新取得用户确认。发布按任务 `workflow.json` 记录的 `account` 取对应账号的凭证（微信 `app_id` / `app_secret` / `author`，小红书 `cookie`），不重新选择账号；微信 access_token 缓存按 AppID 隔离。凭证配置与缓存位置见 [环境与运行](setup.md#配置与凭证)。微信未配置凭证时在调用 API 之前报错。
 
 **小红书发布**：七步完成后 `publish` 按清单顺序上传组图与笔记文案，默认「仅自己可见」；公开需用户显式 `--public`，可先 `--dry-run` 预演（仅本地校验，不登录不发布）。未配置 Cookie 时在启动浏览器前报错，失效时中止并报告失败。只有观察到站点成功信号才报告已发布；失败保留截图，可修正后重试。
 
@@ -208,9 +208,9 @@ python3 openwrite.py publish articles/rag-guide
 ## 返工与恢复
 
 ```bash
-python3 openwrite.py workflow reset articles/rag-guide --from draft
+.venv/bin/python openwrite.py workflow reset articles/rag-guide --from draft
 # 修改 outline.md / draft.md，重新取得确认后从 draft 阶段逐步完成
-python3 openwrite.py workflow complete articles/rag-guide --step draft
+.venv/bin/python openwrite.py workflow complete articles/rag-guide --step draft
 ```
 
 退回会清除该阶段及其下游完成状态，保留产物文件，不删除图片或正文。可以复用仍符合新需求的图片，但必须重新检查并提交图片阶段验收；需要重新取得图片时使用图片入口的 `--overwrite`。只重排版时 `reset --from format` 即可，不影响正文与已验收图片。

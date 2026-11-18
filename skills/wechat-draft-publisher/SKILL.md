@@ -7,7 +7,7 @@ description: 自动将 HTML 文章发布到微信公众号草稿箱，支持封�
 
 ## Agent 运行约定
 
-在 OpenWrite 项目中统一通过根目录 `openwrite.py` 调用本能力，由项目控制器检查七步完成状态。排版是第七步，使用 `format <文章目录>`；上传使用 `publish <文章目录>`，它要求 `publish-manifest.json` 的指纹与当前产物一致，标题/作者/摘要默认取自该清单（可用 `--title` / `--author` / `--digest` 显式覆盖）。下方直接脚本命令是底层能力说明，不用于绕过项目阶段检查。
+在 OpenWrite 项目中统一通过根目录 `openwrite.py` 调用本能力，由项目控制器检查七步完成状态。排版是第七步，使用 `format <文章目录>`；上传使用 `publish <文章目录>`，它要求 `publish-manifest.json` 的指纹与当前产物一致，标题/作者/摘要默认取自该清单（可用 `--title` / `--author` / `--digest` 显式覆盖）。上传账号沿用任务 `workflow.json` 记录的 `account`（创建任务时可用 `new --account` 显式指定），凭证按该账号读取。下方直接脚本命令是底层能力说明，不用于绕过项目阶段检查。
 
 在 OpenWrite 项目中，由根目录 `AGENT_GUIDE.md` 调度本技能。当前文章位于 `articles/<文章目录>/`；所有正文、封面、配图及 HTML 保存到该目录，不写入技能目录。项目任务优先采用用户指定的文章目录；未指定时创建新目录。
 
@@ -33,7 +33,7 @@ python publisher.py \
 ```
 
 **默认值：**
-- 作者：从项目 `.env` 的 `WeChatAuthor` 读取；未配置时首次运行会询问，确认后回写到 `.env`
+- 作者：从项目 `openwrite.yaml` 当前账号的 `author` 读取；未配置时首次运行会询问，确认后回写到该账号
 - 封面图：`cover.png`
 
 ## 📋 执行步骤
@@ -77,10 +77,10 @@ python publisher.py \
 
 2. **生成本地配置并填写**
    ```bash
-   # 在项目根目录执行；复制 .env.example 为 .env，已存在则不覆盖
-   python3 openwrite.py setup
+   # 在项目根目录执行；复制 openwrite.example.yaml 为 openwrite.yaml，已存在则不覆盖
+   .venv/bin/python openwrite.py setup
    ```
-   编辑项目根目录的 `.env`，填写 `WeChatAppID`、`WeChatAppSecret`，可选 `WeChatAuthor`。
+   编辑项目根目录的 `openwrite.yaml`，在 `wechat.accounts.<账号名>` 下填写 `app_id`、`app_secret`，可选 `author` 与 `name`（公众号名，由用户填写便于识别）。
 
 3. **添加服务器 IP 到白名单**（如需要）
 
@@ -88,22 +88,28 @@ python publisher.py \
 
 ### 配置文件
 
-**位置：** 项目根目录 `.env`（由 `openwrite.py setup` 从 `.env.example` 复制生成）
+**位置：** 项目根目录 `openwrite.yaml`（由 `openwrite.py setup` 从 `openwrite.example.yaml` 复制生成）
 
 **格式：**
-```dotenv
-WeChatAppID=wx1234567890abcdef
-WeChatAppSecret=你的_appsecret
-WeChatAuthor=你的作者名
+```yaml
+wechat:
+  default_account: 账号1   # 多账号时的缺省账号；单账号可省略
+  accounts:
+    账号1:
+      name: ""            # 公众号名，用户填写
+      app_id: wx1234567890abcdef
+      app_secret: 你的_appsecret
+      author: 你的作者名
 ```
 
-- `.env` 已被 `.gitignore` 忽略，`setup` 会设置权限 600；`.env.example` 只是被跟踪的占位模板，不要写入真实密钥。
-- 运行时只读取 `.env`，模板不参与解析；值含空格时用双引号包裹。
-- access_token 缓存仍在 `~/.wechat-publisher/token_cache.json`，与凭证配置分开。
+- `openwrite.yaml` 已被 `.gitignore` 忽略，`setup` 会设置权限 600；`openwrite.example.yaml` 只是被跟踪的占位模板，不要写入真实密钥。
+- 运行时只读取 `openwrite.yaml`（`yaml.safe_load` 解析，不执行任何内容），模板不参与解析。
+- 可同时维护多个公众号账号；发布按任务账号取凭证，任务创建时可用 `new --account` 显式指定。
+- access_token 缓存按 AppID 隔离：`~/.wechat-publisher/token_cache.<appid>.json`，与凭证配置分开。
 
 ## ✨ 核心功能
 
-- ✅ access_token 自动缓存（有效期 7200 秒）
+- ✅ access_token 自动缓存（有效期 7200 秒，按 AppID 隔离）
 - ✅ 封面图上传和管理
 - ✅ HTML 内容自动优化（适配微信）
 - ✅ 字段长度自动截断（标题/作者/摘要）
@@ -137,7 +143,7 @@ WeChatAuthor=你的作者名
 ### 错误：AppSecret 错误
 **症状：** `AppSecret error`
 **解决：**
-- 检查项目根目录 `.env` 中的 `WeChatAppID` 和 `WeChatAppSecret`
+- 检查项目根目录 `openwrite.yaml` 中对应账号的 `app_id` 和 `app_secret`
 - 验证 AppID 以 "wx" 开头（18 个字符）
 - 确认 AppSecret 正确
 

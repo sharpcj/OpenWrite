@@ -96,18 +96,19 @@ class RednotePublisher:
     """Drive the creator publish page with Playwright; verify before claiming."""
 
     def __init__(self, root=None, base_url: str = CREATOR_ORIGIN, headed: bool = False,
-                 timeout: float = 120, artifact_dir=None, publish_url: str = None):
+                 timeout: float = 120, artifact_dir=None, publish_url: str = None, account=None):
         self.root = Path(root).expanduser().resolve() if root else PROJECT_ROOT
         self.base_url = base_url.rstrip('/')
         self.publish_url = publish_url or self.base_url + PUBLISH_URL_PATH
         self.headed = headed
         self.timeout_ms = int(timeout * 1000)
         self.artifact_dir = Path(artifact_dir).expanduser().resolve() if artifact_dir else None
+        self.account = account
         self.preferences = load_preferences(self.root)
 
     def publish(self, title: str, desc: str, images: list, topics: list, public: bool = False) -> dict:
         paths = validate_note(title, desc, images, topics)
-        cookie_text = self.preferences.require_xhs_cookie(self.root)
+        cookie_text = self.preferences.require_xhs_cookie(self.root, self.account)
         cookies = validate_cookie(cookie_text)
         from playwright.sync_api import sync_playwright
         with sync_playwright() as playwright:
@@ -158,11 +159,11 @@ class RednotePublisher:
         url = page.url.lower()
         if 'login' in url or 'passport' in url:
             raise ValueError('Cookie 已失效或未被识别（跳转到登录页）；'
-                             '请重新登录创作服务平台并更新 XhsCreatorCookie')
+                             '请重新登录创作服务平台并更新 openwrite.yaml 中对应账号的 cookie')
         for text in ('扫码登录', '手机号登录'):
             locator = page.get_by_text(text).first
             if locator.count() and locator.is_visible():
-                raise ValueError('页面要求登录，Cookie 已失效；请重新登录创作服务平台并更新 XhsCreatorCookie')
+                raise ValueError('页面要求登录，Cookie 已失效；请重新登录创作服务平台并更新 openwrite.yaml 中对应账号的 cookie')
 
     def _upload(self, page, paths):
         upload = page.locator('input[type="file"]').first
@@ -315,7 +316,8 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument('--dry-run', action='store_true', help='仅本地参数校验，不登录、不上传、不发布')
     parser.add_argument('--headed', action='store_true', help='使用有头浏览器，便于观察过程或协助登录')
     parser.add_argument('--timeout', type=float, default=120, help='单步与结果确认超时（秒）')
-    parser.add_argument('--project-root', help='项目根目录（读取 .env），默认为脚本所在项目')
+    parser.add_argument('--project-root', help='项目根目录（读取 openwrite.yaml），默认为脚本所在项目')
+    parser.add_argument('--account', help='小红书账号名（openwrite.yaml 中 rednote.accounts 下的键；缺省用唯一账号或 default_account）')
     parser.add_argument('--base-url', default=CREATOR_ORIGIN, help='创作服务平台地址（测试可指向本地模拟页）')
     parser.add_argument('--artifact-dir', help='失败截图保存目录，通常为文章目录')
     return parser
@@ -335,7 +337,7 @@ def main(argv=None) -> int:
             return 0
         publisher = RednotePublisher(root=args.project_root, base_url=args.base_url,
                                      headed=args.headed, timeout=args.timeout,
-                                     artifact_dir=args.artifact_dir)
+                                     artifact_dir=args.artifact_dir, account=args.account)
         result = publisher.publish(args.title, args.desc, args.images, args.topics, public=args.public)
         print('小红书笔记发布成功')
         print(json.dumps(result, ensure_ascii=False))

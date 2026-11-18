@@ -20,9 +20,9 @@ make setup
 make doctor
 ```
 
-`make setup` creates or reuses `.venv`, installs dependencies, and copies `.env.example` to local `.env` without overwriting existing configuration. Dependency installation needs network access. It does not fill credentials, generate images or publish anything.
+`make setup` creates or reuses `.venv`, installs dependencies, and copies `openwrite.example.yaml` to local `openwrite.yaml` without overwriting existing configuration. Dependency installation needs network access. It does not fill credentials, generate images or publish anything.
 
-Edit `.env` for the platform, writer role and optional service credentials. The template enables WeChat and the blogger role. WeChat also supports technical and product-manager perspectives; Rednote currently supports the blogger role. Configure image and publishing services before using them.
+Edit `openwrite.yaml` for platforms, accounts, writer role and optional service credentials. Each platform can hold multiple accounts under `wechat.accounts` / `rednote.accounts`, keyed by generic names such as `账号1` / `账号2`; a platform is enabled when it has at least one account (`enabled: false` pauses it). The account key is the identifier used by `--account` and task snapshots; each account also accepts an optional `name` string for human recognition — Official account name (user-filled) on WeChat, Account name (user-filled) on Rednote. Settings merge in the order `defaults` → platform section → account → task snapshot. The template enables WeChat with the blogger role. WeChat also supports technical and product-manager perspectives (overridable per account); Rednote only supports the blogger role. Configure image sources under `image_sources` and publishing credentials before using them.
 
 Rednote card rendering and publishing additionally need a one-time browser download:
 

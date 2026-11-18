@@ -63,17 +63,21 @@ def read_json(path: Path) -> dict:
 
 def initialize(article: Path, title: str = '', perspective: str = 'tech',
                platform: str = platforms.WECHAT, selection_source=None,
-               outline_approval: bool = True, cover_style=None) -> dict:
+               outline_approval: bool = True, cover_style=None, account=None) -> dict:
     path = layout.path(article, 'workflow.json')
     if path.exists():
         raise ValueError('workflow.json 已存在；继续任务请查看 status，重做请使用 reset')
     if platform not in preferences.PLATFORM_LABELS or perspective not in preferences.PERSPECTIVE_LABELS:
         raise ValueError('平台或写作视角不受支持')
+    if account is not None and (not isinstance(account, str) or not account.strip()):
+        raise ValueError('账号名必须为非空字符串')
     state = {'version': 1, 'title': title, 'type': perspective,
              'platform': platform, 'perspective': perspective,
              'selection_source': selection_source or {},
              'outline_approval': bool(outline_approval), 'revision': 0, 'completed': [],
              'created_at': datetime.now().astimezone().isoformat(timespec='seconds')}
+    if account:
+        state['account'] = account
     if platform == platforms.WECHAT and cover_style:
         state['cover_style'] = preferences.validate_cover_style(cover_style)
     write_json(path, state)
@@ -92,6 +96,8 @@ def load(article: Path) -> dict:
         preferences.validate_cover_style(state['cover_style'])
     if 'outline_approval' in state and type(state['outline_approval']) is not bool:
         raise ValueError('workflow.json 的 outline_approval 必须是布尔值')
+    if 'account' in state and (not isinstance(state['account'], str) or not state['account'].strip()):
+        raise ValueError('workflow.json 的 account 必须是非空字符串')
     for index, record in enumerate(records):
         if (not isinstance(record, dict) or record.get('step') != STEPS[index]
                 or not isinstance(record.get('proof'), str)):
@@ -488,7 +494,7 @@ def require_format_stage(article: Path) -> dict:
 def publish_metadata(article: Path, state: dict) -> dict:
     profile = platforms.for_state(state)
     root = Path(__file__).resolve().parent
-    author = preferences.credential_value(root, profile['author_key'])
+    author = preferences.credential_value(root, profile['author_key'], account=state.get('account'))
     return {'title': state['title'], 'author': author, 'digest': ''}
 
 

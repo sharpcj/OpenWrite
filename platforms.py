@@ -45,7 +45,7 @@ REGISTRY = {
         },
         'checks': {'code_blocks_converted': True, 'local_images_exist': True},
         'author_key': 'WeChatAuthor',
-        'credential_keys': ('WeChatAppID', 'WeChatAppSecret', 'WeChatAuthor'),
+        'credential_keys': ('app_id', 'app_secret', 'author'),
     },
     REDNOTE: {
         'label': '小红书',
@@ -77,7 +77,7 @@ REGISTRY = {
         },
         'checks': {'code_blocks_converted': False, 'local_images_exist': True},
         'author_key': None,
-        'credential_keys': ('XhsCreatorCookie',),
+        'credential_keys': ('cookie',),
         'card_spec': {
             'ratio': '3:4',
             'safe_area': {'side': (72, 96), 'top': (72, 112), 'bottom': (80, 120)},

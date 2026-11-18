@@ -24,11 +24,11 @@ class CoverStyleTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix='openwrite-cover-style-')
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name).resolve()
-        self.config = self.root / '.env'
-        self.config.write_text('WeChat=true\nWriterRole=SelfMediaBlogger\n'
-                               'WeChatCoverLayout="左文右图"\n'
-                               'WeChatCoverVisualStyle="温暖插画"\n'
-                               'WeChatCoverColorTone="暖黄奶油色"\n')
+        self.config = self.root / preferences.CONFIG_NAME
+        self.config.write_text('wechat:\n  accounts:\n    主号:\n      cover:\n'
+                               '        layout: 左文右图\n'
+                               '        visual_style: 温暖插画\n'
+                               '        color_tone: 暖黄奶油色\n', encoding='utf-8')
 
     def cli(self, *args):
         for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py'):
@@ -50,7 +50,8 @@ class CoverStyleTests(unittest.TestCase):
         state = workflow.load(article)
         self.assertEqual(state['cover_style'], dict(STYLE, visual_style='科技线稿'))
         before = (layout.path(article, 'workflow.json')).read_bytes()
-        self.config.write_text('WeChat=true\nWeChatCoverColorTone="青绿渐变"\n')
+        self.config.write_text('wechat:\n  accounts:\n    主号:\n      cover:\n'
+                               '        color_tone: 青绿渐变\n', encoding='utf-8')
         result = self.cli('workflow', 'status', str(article))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('暖黄奶油色', result.stdout)
@@ -64,7 +65,8 @@ class CoverStyleTests(unittest.TestCase):
     def test_style_can_be_changed_before_cover_without_reading_new_defaults(self):
         self.assertEqual(self.cli('new', 'topic').returncode, 0)
         article = self.root / 'articles/topic'
-        self.config.write_text('WeChat=true\nWeChatCoverLayout="居中标题"\n')
+        self.config.write_text('wechat:\n  accounts:\n    主号:\n      cover:\n'
+                               '        layout: 居中标题\n', encoding='utf-8')
         result = self.cli('workflow', 'cover-style', str(article), '--cover-color-tone', '青绿渐变')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(workflow.load(article)['cover_style'], dict(STYLE, color_tone='青绿渐变'))

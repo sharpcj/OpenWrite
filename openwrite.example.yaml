@@ -1,0 +1,91 @@
+# OpenWrite 配置模板（平台账号、写作视角、凭证与配图来源）
+# 本文件只是打样模板，会被 Git 跟踪，不参与任何运行时解析。
+# 运行 .venv/bin/python openwrite.py setup 复制为 openwrite.yaml 后填写；运行时只读取 openwrite.yaml。
+# openwrite.yaml 已被 Git 忽略（权限 600），只按 YAML 解析（safe_load），不执行任何内容。
+#
+# 合并顺序（后者覆盖前者）：defaults → 平台节 → accounts.<账号名> → 任务快照。
+# 平台选择：本次提示词明确指定 > 配置中唯一启用项 > 询问用户确认。
+# 账号选择：本次明确指定 > 该平台唯一账号 > default_account > 询问用户确认。
+# 平台下账号数 ≥ 1 即视为启用；可加 enabled: false 暂停使用（配置保留）。
+# 本次提示词的选择只作用于当前任务，不回写长期配置；任务创建后沿用快照。
+
+# 全局缺省：写作视角与流程开关。微信账号可逐项覆盖；小红书仅支持 blogger。
+defaults:
+  # 写作视角：blogger / tech / product（也接受 SelfMediaBlogger / TechWriter / ProductManager）
+  writer_role: blogger
+  # OutlineApproval=true：分析完成后、写正文前，必须给出三个备选标题
+  #（至少一个激进悬念、一个客观中性，第三个默认利益实用）与大纲，
+  # 由用户选定标题并确认大纲后才生成全文；可反复讨论修改。
+  # 设为 false 表示用户授权跳过该检查点，AI 直接写正文。
+  outline_approval: true
+
+# 微信公众号：可同时维护多个账号，每个账号的凭证、视角与封面样式可以不同。
+wechat:
+  # 多账号且未显式指定时使用的默认账号；只有一个账号时可省略。
+  default_account: 账号1
+  accounts:
+    账号1:
+      # 公众号名：由用户填写，便于识别这个账号对应哪个公众号。
+      name: ""
+      # 获取方式：https://mp.weixin.qq.com → 设置与开发 → 基本配置
+      # 真实密钥只写在 openwrite.yaml，不要写入本模板或提交到仓库。
+      app_id: ""
+      app_secret: ""
+      author: ""
+      # 可选覆盖：该账号的写作视角与检查点开关（缺省沿用 defaults）。
+      # writer_role: tech
+      # outline_approval: true
+      # 微信封面图样式：三个维度独立配置，可使用中文或自定义描述。
+      # 版式示例：左文右图 / 居中标题 / 上文下图 / 自定义构图描述。
+      # 左文右图：整张统一背景，主体靠右，左侧留白叠加标题与关键词句，不与主体重叠。
+      cover:
+        layout: 左文右图
+        # 视觉风格示例：温暖插画 / 科技线稿 / 写实摄影 / 极简抽象。
+        visual_style: 温暖插画
+        # 色调示例：暖黄奶油色 / 青绿渐变 / 蓝紫渐变 / 自定义品牌色及色值。
+        color_tone: 暖黄奶油色
+    # 第二个公众号示例：复制一个账号块并改名即可。
+    # 账号2:
+    #   name: ""
+    #   app_id: ""
+    #   app_secret: ""
+    #   author: ""
+
+# 小红书：可同时维护多个账号；每个账号一份创作服务平台 Cookie。
+rednote:
+  default_account: 账号1
+  accounts:
+    账号1:
+      # 账号名：由用户填写，便于识别这个账号对应哪个小红书号。
+      name: ""
+      # 浏览器登录 https://creator.xiaohongshu.com 后，开发者工具 → 网络，
+      # 复制任一创作平台请求的完整 Cookie（需含 a1 与 web_session 等登录凭证）。
+      # 发布默认「仅自己可见」；公开需显式 --public 授权。Cookie 会过期，失效时重新复制。
+      cookie: ""
+    # 账号2:
+    #   name: ""
+    #   cookie: ""
+
+# --- 配图来源（openwrite-images） ---
+# 服务地址与密钥统一配置在本节；模型档案、来源优先级与叠字字体等底层默认参数
+# 在 skills/openwrite-images/config.json。进程环境变量（如 FAL_KEY）可覆盖同名配置。
+image_sources:
+  # ComfyUI 服务地址（含端口），本地或远程均可；多个地址用逗号分隔，本地优先。
+  # 缺省默认 http://localhost:8188。
+  comfyui_server_url: ""
+  # 在线 AI 生图：fal.ai（FLUX / Recraft 等）
+  # 获取：https://fal.ai/dashboard/keys ；两个键任填其一即可（别名关系）。
+  fal_key: ""
+  fal_ai_api_key: ""
+  # 在线 AI 生图：腾讯混元 TokenHub（Bearer token，Hy-Image 系列）
+  # 获取：https://console.cloud.tencent.com/tokenhub
+  tencent_tokenhub_api_key: ""
+  # 免费图片资源站点（搜索并下载正版免费图片）
+  # Pexels: https://www.pexels.com/api/  Pixabay: https://pixabay.com/api/docs/
+  # Unsplash: https://unsplash.com/developers
+  pexels_api_key: ""
+  pixabay_api_key: ""
+  unsplash_access_key: ""
+  # 备用在线生图（可选）：Gemini / DALL-E
+  # gemini_api_key: ""
+  # openai_api_key: ""

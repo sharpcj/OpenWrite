@@ -5,13 +5,16 @@ __pycache__/
 *.pyd
 .venv/
 venv/
-# Local config holding real WeChat credentials (created by `openwrite.py setup`)
+# Local config holding real account credentials (created by `openwrite.py setup`)
+openwrite.yaml
+# Atomic-write temp files created next to openwrite.yaml by preferences.set_account_author().
+# They contain the full config including AppSecret, so they must never be tracked
+# even if a crash leaves one behind.
+openwrite-config-*
+# Legacy flat config from before the YAML migration; never track real secrets.
 .env
 .env.*
 !.env.example
-# Atomic-write temp files created next to .env by preferences.set_env_value().
-# They contain the full config including AppSecret, so they must never be tracked
-# even if a crash leaves one behind (.env.* does not match the .env- prefix).
 .env-*
 
 # Internal atomic-write / staging temp artifacts (normally inside articles/,
@@ -41,7 +44,7 @@ htmlcov/
 .pytest_cache/
 
 # Defensive: the publisher no longer reads this path, but a legacy file here
-# would contain AppID/AppSecret. Real credentials belong in the local .env.
+# would contain AppID/AppSecret. Real credentials belong in openwrite.yaml.
 skills/wechat-draft-publisher/config.json
 
 # Note:
@@ -52,10 +55,10 @@ skills/wechat-draft-publisher/config.json
 #   so you have a working default; override per-machine via env vars
 #   (COMFYUI_URL / COMFYUI_OUTPUT_DIR) instead of editing the file.
 #
-# WeChat credentials (WeChatAppID / WeChatAppSecret / WeChatAuthor) live in the
-# local .env created by `python3 openwrite.py setup`. It is ignored above;
-# .env.example stays tracked as a placeholder template and must never hold
-# real secrets.
+# Account credentials (app_id / app_secret / author / cookie) live in the local
+# openwrite.yaml created by `.venv/bin/python openwrite.py setup`. It is ignored
+# above; openwrite.example.yaml stays tracked as a placeholder template and must
+# never hold real secrets.
 
 # Local article workspaces (keep only the empty directory marker)
 /articles/*

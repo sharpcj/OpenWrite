@@ -13,13 +13,13 @@ description: 执行 OpenWrite 的配图需求，获取并校验本地图片。�
 
 ## 图片来源与选择
 
-四类来源，地址与密钥统一配置在项目根 `.env`（见 [后端配置](references/api-configuration.md)）；模型档案、默认优先级与封面叠字版式在本目录 `config.json`：
+四类来源，地址与密钥统一配置在项目根 `openwrite.yaml` 的 `image_sources` 节（见 [后端配置](references/api-configuration.md)），进程环境变量（如 `FAL_KEY`）可覆盖同名小写字段；模型档案、默认优先级与封面叠字版式在本目录 `config.json`：
 
-| 来源 | 后端名 | 配置项 |
+| 来源 | 后端名 | 配置项（`image_sources` 下） |
 |---|---|---|
-| 本地/远程 ComfyUI | `comfyui` | `COMFYUI_SERVER_URL`（含端口，可逗号分隔多地址，本地优先） |
-| 在线 AI 生图 | `fal` / `hunyuan` | `FAL_KEY`（或别名 `FAL_AI_API_KEY`）/ `TENCENT_TOKENHUB_API_KEY` |
-| 免费图片资源站点 | `pexels` / `pixabay` / `unsplash` | `PEXELS_API_KEY` / `PIXABAY_API_KEY` / `UNSPLASH_ACCESS_KEY` |
+| 本地/远程 ComfyUI | `comfyui` | `comfyui_server_url`（含端口，可逗号分隔多地址，本地优先） |
+| 在线 AI 生图 | `fal` / `hunyuan` | `fal_key`（或别名 `fal_ai_api_key`）/ `tencent_tokenhub_api_key` |
+| 免费图片资源站点 | `pexels` / `pixabay` / `unsplash` | `pexels_api_key` / `pixabay_api_key` / `unsplash_access_key` |
 | 已有图片导入 | `file` | 无需配置；宿主生图输出、用户图片、**官方文档插图**均由 Agent 取得本地文件后导入 |
 
 **按内容评估选源**由写作侧（Agent）完成：评估每张图适合什么来源，在需求中用 `preferred_sources` 声明偏好顺序；未声明时使用默认优先级：
@@ -35,7 +35,7 @@ description: 执行 OpenWrite 的配图需求，获取并校验本地图片。�
 - **微信封面用「底图 + 叠字」**：底图不渲染文字（`text` 置空），标题/副标题写在需求 `overlay` 对象中，由 `cover_text.py` 用 Pillow 精确排版叠加（默认底部渐变衬底 + 白色粗标题，可在 `overlay` 中覆盖位置/颜色/字号/字体）。`overlay.title` 必须是已确认的文章标题，控制器会校验一致性。
 - 宿主 Agent 的生图工具：按其实际接口调用，将真实图片保存到本地后以 `file` 方式导入；不假设通用工具名、免费服务或统一参数。
 - 流程图、板书和精确数据图优先使用可准确控制文字、连接关系和数据的绘图方式，之后导入；不要用不清晰的图代替精确表达。
-- 保留 `gemini`、`dalle` 备用 API（密钥同样可配在 `.env`），需用户已选择并配置；不参与 auto 默认优先级。Gemini 另需 `google-genai` SDK。
+- 保留 `gemini`、`dalle` 备用 API（密钥同样可配在 `image_sources` 的 `gemini_api_key` / `openai_api_key`），需用户已选择并配置；不参与 auto 默认优先级。Gemini 另需 `google-genai` SDK。
 
 ## 执行与交付
 
@@ -45,18 +45,18 @@ description: 执行 OpenWrite 的配图需求，获取并校验本地图片。�
 
 ```bash
 # 默认 auto：按优先级多来源尝试并自动回退
-python3 openwrite.py image articles/my-topic --id cover
+.venv/bin/python openwrite.py image articles/my-topic --id cover
 
 # 显式指定单一来源
-python3 openwrite.py image articles/my-topic --id cover --backend comfyui
-python3 openwrite.py image articles/my-topic --id cover --backend fal
-python3 openwrite.py image articles/my-topic --id diagram --backend pexels
+.venv/bin/python openwrite.py image articles/my-topic --id cover --backend comfyui
+.venv/bin/python openwrite.py image articles/my-topic --id cover --backend fal
+.venv/bin/python openwrite.py image articles/my-topic --id diagram --backend pexels
 
 # 导入宿主工具、官方文档插图或用户提供的真实图片
-python3 openwrite.py image articles/my-topic --id cover --backend file --source /path/to/image.png
+.venv/bin/python openwrite.py image articles/my-topic --id cover --backend file --source /path/to/image.png
 
 # 明确允许留白适配或裁剪适配时
-python3 openwrite.py image articles/my-topic --id cover --backend file --source /path/to/image.jpg --fit contain
+.venv/bin/python openwrite.py image articles/my-topic --id cover --backend file --source /path/to/image.jpg --fit contain
 ```
 
 也可独立运行本目录的 `scripts/produce.py <文章目录> --id <标识> ...`。路径参数相对于调用时的工作目录。
@@ -68,7 +68,7 @@ python3 openwrite.py image articles/my-topic --id cover --backend file --source 
 
 ## ComfyUI 后端
 
-`comfyui_gen.py` 负责工作流参数注入、提交任务和等待结果。服务地址来自 `.env` 的 `COMFYUI_SERVER_URL`（环境变量可覆盖）；配置多个地址时本地（loopback）优先，逐个探测取第一个可达者。`produce.py` 再读取输出文件、校验真实图片并保存到文章目录。后端输出目录（`COMFYUI_OUTPUT_DIR` 或 config.json）需在当前机器可访问；远程服务没有共享输出目录时，不能把虚构的本地路径当作图片。
+`comfyui_gen.py` 负责工作流参数注入、提交任务和等待结果。服务地址来自 `openwrite.yaml` 的 `image_sources.comfyui_server_url`（进程环境变量 `COMFYUI_SERVER_URL` 可覆盖）；配置多个地址时本地（loopback）优先，逐个探测取第一个可达者。`produce.py` 再读取输出文件、校验真实图片并保存到文章目录。后端输出目录（环境变量 `COMFYUI_OUTPUT_DIR` 或 config.json 的 `comfyui_output_dir`）需在当前机器可访问；远程服务没有共享输出目录时，不能把虚构的本地路径当作图片。
 
 需要图中渲染中文时优先 `z-image`，否则使用 `flux2`。可通过 `--profile` 显式覆盖；默认规则来自配置。需求执行入口仅用 `text` 字段判断画面是否要渲染中文，不把中文构图说明误当作画面文字。模型与工作流细节只在本能力维护，见 [模型档案指南](references/comfyui-profiles.md) 和 [后端配置](references/api-configuration.md)。
 

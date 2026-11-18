@@ -1,40 +1,45 @@
 # 微信封面图样式配置
 
-封面样式由三个独立维度组成。`.env.example` 是模板；在本地 `.env` 填写：
+封面样式由三个独立维度组成。`openwrite.example.yaml` 是模板；在本地 `openwrite.yaml` 的 `wechat.accounts.<账号名>.cover` 下按账号填写：
 
-```dotenv
-WeChatCoverLayout="左文右图"
-WeChatCoverVisualStyle="温暖插画"
-WeChatCoverColorTone="暖黄奶油色"
+```yaml
+wechat:
+  accounts:
+    账号1:
+      name: ""            # 公众号名，用户填写
+      cover:
+        layout: 左文右图
+        visual_style: 温暖插画
+        color_tone: 暖黄奶油色
 ```
 
 | 配置项 | 作用 | 示例 |
 |---|---|---|
-| `WeChatCoverLayout` | 文字与主要画面元素如何摆放 | 左文右图、居中标题、自定义构图描述 |
-| `WeChatCoverVisualStyle` | 图片的视觉表现形式 | 温暖插画、科技线稿、写实摄影、极简抽象、自定义品牌插画 |
-| `WeChatCoverColorTone` | 全图色彩和氛围 | 暖黄奶油色、青绿渐变、蓝紫渐变、品牌色及色值 |
+| `cover.layout` | 文字与主要画面元素如何摆放 | 左文右图、居中标题、自定义构图描述 |
+| `cover.visual_style` | 图片的视觉表现形式 | 温暖插画、科技线稿、写实摄影、极简抽象、自定义品牌插画 |
+| `cover.color_tone` | 全图色彩和氛围 | 暖黄奶油色、青绿渐变、蓝紫渐变、品牌色及色值 |
 
-三项都接受自定义单行描述，不限定为固定套餐。含空格或色值 `#` 时使用引号，避免被当作注释。每项最长 300 字。当前这些配置只作用于微信，小红书继续使用卡片设计规则。
+三项都接受自定义单行描述，不限定为固定套餐。含 `#` 的色值用引号包裹，避免被当作 YAML 注释。每项最长 300 字。当前这些配置只作用于微信，且每个账号可以不同；小红书继续使用卡片设计规则。
 
 ## 选择和任务快照
 
-各维度分别遵循：**本次用户明确指定 > `.env` 中的配置**。未配置的维度由当次封面设计明确；有歧义时让用户选择，不把主题词当成用户明确指定。
+各维度分别遵循：**本次用户明确指定 > `openwrite.yaml` 中任务账号的封面配置**。未配置的维度由当次封面设计明确；有歧义时让用户选择，不把主题词当成用户明确指定。
 
 ```bash
-# 使用本地默认值
-python3 openwrite.py new my-topic --title "文章标题"
+# 使用账号配置中的默认值
+.venv/bin/python openwrite.py new my-topic --title "文章标题"
 # 只覆盖视觉风格，版式和色调继续采用各自的配置
-python3 openwrite.py new another-topic --title "文章标题" --cover-visual-style "科技线稿"
+.venv/bin/python openwrite.py new another-topic --title "文章标题" --cover-visual-style "科技线稿"
 # 三项均按本次需求指定
-python3 openwrite.py new custom-topic --cover-layout "左文右图" --cover-visual-style "极简抽象" --cover-color-tone "青绿渐变"
+.venv/bin/python openwrite.py new custom-topic --cover-layout "左文右图" --cover-visual-style "极简抽象" --cover-color-tone "青绿渐变"
 ```
 
 `new` 和 `workflow init` 将确定的值保存为任务 `workflow.json` 的 `cover_style`，可通过 `workflow status` 查看。配置缺省时不强行给旧流程补默认值；没有该字段的旧任务保持原有需求与图片指纹。
 
-修改 `.env` 只影响新任务。继续已有任务读取其快照；需要修改当前任务时：
+修改 `openwrite.yaml` 只影响新任务。继续已有任务读取其快照；需要修改当前任务时：
 
 ```bash
-python3 openwrite.py workflow cover-style articles/my-topic --cover-color-tone "青绿渐变"
+.venv/bin/python openwrite.py workflow cover-style articles/my-topic --cover-color-tone "青绿渐变"
 ```
 
 该命令只修改明确传入的维度，其他维度沿用当前任务快照，不读取新的全局默认值。封面阶段已经完成时，先 `workflow reset <目录> --from cover` 再修改，并重新生成与验收封面。

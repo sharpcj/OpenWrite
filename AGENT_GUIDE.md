@@ -11,14 +11,14 @@ OpenWrite 支持微信公众号与小红书图文创作，Skill 位于项目 `sk
 - 继续创作或处理指定产物：优先使用用户指定目录，先运行 `workflow status <目录>`，再读 `process/brief.md` 与已有产物。不凭修改时间挑选待发布文章，不覆盖其他任务。
 - 用户只要求某个阶段：仅处理已到达的阶段，不能跳过未完成的前置步骤。缺少能力时记录待办，交付实际完成的部分。
 
-## 平台、视角与快照
+## 平台、账号、视角与快照
 
-新任务按 [平台与视角选择](docs/task-selection.md) 解析。平台、视角及流程开关只读取本地 `.env`，`.env.example` 仅供 `setup` 复制，运行时不作回退。
+新任务按 [平台与视角选择](docs/task-selection.md) 解析。平台、账号、视角及流程开关只读取本地 `openwrite.yaml`，`openwrite.example.yaml` 仅供 `setup` 复制，运行时不作回退。配置为嵌套 YAML，按 `defaults → 平台节 → accounts.<账号名> → 任务快照` 合并。
 
-1. 用户明确选择优先，由 Agent 转为 `--platform wechat|rednote`、`--perspective blogger|tech|product`。未指定的维度不擅自传参；话题词不等于选择意图。
-2. 未指定平台时，采用配置中唯一启用项；零项或多项启用必须向用户确认，不自动选择首项。模板默认启用微信，没有 `.env` 时平台没有默认项。
-3. 未指定视角时读取 `WriterRole`，缺省默认自媒体博主，无需确认。微信支持 `blogger` / `tech` / `product`，小红书仅支持 `blogger`；遇到不支持的组合，说明限制并取得明确选择，不静默切换。
-4. 继续任务沿用状态中的平台、视角、流程开关与封面快照，不因 `.env` 后续变化重选。可先用 `preferences` 查看解析结果。
+1. 用户明确选择优先，由 Agent 转为 `--platform wechat|rednote`、`--account <账号名>`、`--perspective blogger|tech|product`。未指定的维度不擅自传参；话题词不等于选择意图。
+2. 未指定平台时，采用唯一启用项（平台下账号数 ≥ 1 即启用）；零项或多项启用必须向用户确认，不自动选择首项。模板默认启用微信，没有 `openwrite.yaml` 时平台没有默认项。
+3. 未指定账号时，平台唯一账号自动选用，多账号用 `default_account`，否则向用户确认。未指定视角时读取 `defaults.writer_role`（微信账号可覆盖），缺省默认自媒体博主，无需确认。微信支持 `blogger` / `tech` / `product`，小红书仅支持 `blogger`；遇到不支持的组合，说明限制并取得明确选择，不静默切换。
+4. 继续任务沿用状态中的平台、账号、视角、流程开关与封面快照，不因 `openwrite.yaml` 后续变化重选；发布按任务账号取凭证。可先用 `preferences` 查看解析结果。
 
 微信封面设计前读取任务样式快照。只把用户明确选择的维度转为 `--cover-layout`、`--cover-visual-style`、`--cover-color-tone`；未确定且有歧义的维度请用户选择。修改当前任务用 `workflow cover-style`，已完成封面须先退回 cover。版式、视觉风格、色调及左文右图验收规则见 [封面样式](docs/cover-style.md)，设计时读取。
 

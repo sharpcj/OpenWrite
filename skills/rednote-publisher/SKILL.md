@@ -32,22 +32,29 @@ description: 将已组装的小红书图文产物（3:4 组图 + 笔记文案）
 
 ## 配置
 
-Cookie 与微信凭证共用项目本地 `.env`（`python3 openwrite.py setup` 生成，Git 忽略，权限 600）：
+Cookie 与微信凭证共用项目本地 `openwrite.yaml`（`.venv/bin/python openwrite.py setup` 从模板复制生成，Git 忽略，权限 600）。小红书支持多账号，每个账号一份 Cookie，配置在 `rednote.accounts.<账号名>.cookie`；每个账号可用可选 `name` 填写账号名，便于识别对应哪个小红书号：
 
-```dotenv
-XhsCreatorCookie="a1=...; web_session=...; 其余完整字段"
+```yaml
+rednote:
+  default_account: 账号1   # 多账号时的缺省账号；单账号可省略
+  accounts:
+    账号1:
+      name: ""            # 账号名，用户填写
+      cookie: "a1=...; web_session=...; 其余完整字段"
 ```
 
-获取方式：浏览器登录 https://creator.xiaohongshu.com → 开发者工具 → 网络 → 复制任一创作平台请求的完整 Cookie（需含 `a1` 与 `web_session` 等登录凭证）。Cookie 失效时脚本会明确提示重新复制。不要把真实 Cookie 写入 `.env.example` 或提交到仓库，也不代用户填写。
+获取方式：浏览器登录 https://creator.xiaohongshu.com → 开发者工具 → 网络 → 复制任一创作平台请求的完整 Cookie（需含 `a1` 与 `web_session` 等登录凭证）。Cookie 失效时脚本会明确提示重新复制。不要把真实 Cookie 写入 `openwrite.example.yaml` 或提交到仓库，也不代用户填写。
+
+发布使用任务创建时选定的账号（`new --account` 可显式指定；缺省按平台唯一账号 > `default_account` > 询问用户），`publish` 按任务 `workflow.json` 记录的 `account` 取对应 Cookie。
 
 ## 执行与交付
 
 ```bash
 # 项目入口（推荐）：七步完成且用户确认后
-python3 openwrite.py publish articles/my-note            # 默认仅自己可见
-python3 openwrite.py publish articles/my-note --dry-run  # 预演：仅本地校验
-python3 openwrite.py publish articles/my-note --public   # 用户明确授权公开
-python3 openwrite.py publish articles/my-note --headed   # 有头浏览器，便于观察
+.venv/bin/python openwrite.py publish articles/my-note            # 默认仅自己可见
+.venv/bin/python openwrite.py publish articles/my-note --dry-run  # 预演：仅本地校验
+.venv/bin/python openwrite.py publish articles/my-note --public   # 用户明确授权公开
+.venv/bin/python openwrite.py publish articles/my-note --headed   # 有头浏览器，便于观察
 
 # 底层脚本（独立使用时不享受项目阶段检查）
 python skills/rednote-publisher/publish_note.py \

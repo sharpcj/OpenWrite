@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 
 # 凭证与平台/视角配置统一由项目根目录的 preferences.py 解析：
-# .env.example 是占位模板，真实值写在被 Git 忽略的 .env 中。
+# openwrite.example.yaml 是占位模板，真实值写在被 Git 忽略的 openwrite.yaml 中。
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -35,7 +35,7 @@ class WeChatPublisher:
     """微信公众号草稿发布器"""
 
     BASE_URL = "https://api.weixin.qq.com/cgi-bin"
-    TOKEN_CACHE_FILE = os.path.expanduser("~/.wechat-publisher/token_cache.json")
+    TOKEN_CACHE_DIR = os.path.expanduser("~/.wechat-publisher")
 
     # 微信API错误码映射
     ERROR_CODES = {
@@ -53,40 +53,45 @@ class WeChatPublisher:
         -1: "系统繁忙，请稍后重试"
     }
 
-    def __init__(self, root=None):
-        """初始化发布器；root 默认为项目根目录，可显式指定以便测试"""
+    def __init__(self, root=None, account=None):
+        """初始化发布器；root 默认为项目根目录，account 指定公众号账号名"""
         self.root = Path(root).expanduser().resolve() if root else PROJECT_ROOT
         self.preferences = load_preferences()
-        self.env_file = self.root / self.preferences.ENV_NAME
+        self.config_file = self.root / self.preferences.CONFIG_NAME
+        self.account = account
         self.appid = None
         self.appsecret = None
         self.access_token = None
         self.author = None
+        self.token_cache_file = None
         self.load_config()
 
     def load_config(self):
-        """只从项目 .env 读取凭证；.env.example 仅是 setup 用的模板"""
+        """只从项目 openwrite.yaml 读取指定账号的凭证；模板仅是 setup 用的打样"""
         try:
-            credentials = self.preferences.require_wechat_credentials(self.root)
+            self.account = self.preferences.choose_account(self.root, 'wechat', self.account)
+            credentials = self.preferences.require_wechat_credentials(self.root, self.account)
         except ValueError as exc:
             raise ValueError(f"微信凭证配置无效:\n{exc}")
 
         self.appid = credentials['appid']
         self.appsecret = credentials['appsecret']
         self.author = credentials['author']
+        # 多账号各自缓存 token，避免不同公众号之间串用凭证
+        self.token_cache_file = os.path.join(self.TOKEN_CACHE_DIR, f"token_cache.{self.appid}.json")
 
         # 验证格式
         if not self.appid.startswith('wx') or len(self.appid) != 18:
             print("⚠ 警告: AppID格式可能不正确（应为wx开头的18位字符）")
 
-        source = self.env_file.name if self.env_file.is_file() else self.preferences.TEMPLATE_NAME
-        print(f"✓ 配置加载成功 (AppID: {self.appid[:6]}***，来源: {source})")
+        source = self.config_file.name if self.config_file.is_file() else self.preferences.TEMPLATE_NAME
+        print(f"✓ 配置加载成功 (账号: {self.account}，AppID: {self.appid[:6]}***，来源: {source})")
 
     def save_author(self, author: str):
-        """将作者名回写到项目 .env，保留其余配置与注释"""
-        self.preferences.set_env_value(self.root, 'WeChatAuthor', author)
+        """将作者名回写到项目 openwrite.yaml 的当前账号，保留其余配置与注释"""
+        self.preferences.set_account_author(self.root, self.account, author)
         self.author = author
-        print(f"✓ 作者已保存到 {self.env_file}")
+        print(f"✓ 作者已保存到 {self.config_file}（账号 {self.account}）")
 
     def _handle_api_error(self, errcode: int, errmsg: str, context: str = "") -> str:
         """统一处理API错误，返回友好的中文提示"""
@@ -108,8 +113,8 @@ class WeChatPublisher:
 
         elif errcode in [40001, 40125, 40013]:
             error_detail += "\n\n💡 解决方法："
-            error_detail += "\n  1. 检查项目 .env 中的WeChatAppID和WeChatAppSecret是否正确"
-            error_detail += f"\n  2. 配置文件位置: {self.env_file}"
+            error_detail += "\n  1. 检查 openwrite.yaml 中当前账号的 app_id 和 app_secret 是否正确"
+            error_detail += f"\n  2. 配置文件位置: {self.config_file}"
             error_detail += "\n  3. AppID应该以wx开头，长度18位"
 
         elif errcode == 45009:
@@ -130,9 +135,9 @@ class WeChatPublisher:
             access_token字符串
         """
         # 尝试从缓存读取
-        if not force_refresh and os.path.exists(self.TOKEN_CACHE_FILE):
+        if not force_refresh and os.path.exists(self.token_cache_file):
             try:
-                with open(self.TOKEN_CACHE_FILE, 'r') as f:
+                with open(self.token_cache_file, 'r') as f:
                     cache = json.load(f)
 
                 # 检查token是否过期（提前5分钟刷新）
@@ -166,17 +171,17 @@ class WeChatPublisher:
         expires_in = result.get('expires_in', 7200)
 
         # 缓存token
-        os.makedirs(os.path.dirname(self.TOKEN_CACHE_FILE), exist_ok=True)
+        os.makedirs(os.path.dirname(self.token_cache_file), exist_ok=True)
         cache_data = {
             'access_token': access_token,
             'expires_at': time.time() + expires_in,
             'updated_at': time.strftime('%Y-%m-%d %H:%M:%S')
         }
 
-        with open(self.TOKEN_CACHE_FILE, 'w') as f:
+        with open(self.token_cache_file, 'w') as f:
             json.dump(cache_data, f, indent=2)
         # access_token 等同于 API 凭证，缓存文件必须收紧权限（仅属主可读写）
-        os.chmod(self.TOKEN_CACHE_FILE, 0o600)
+        os.chmod(self.token_cache_file, 0o600)
 
         print(f"✓ 获取access_token成功 (有效期: {expires_in}秒)")
         return access_token
@@ -780,15 +785,16 @@ def main():
 
     parser.add_argument('-t', '--title', help='文章标题')
     parser.add_argument('-c', '--content', help='文章内容文件路径（HTML格式）')
-    parser.add_argument('-a', '--author', default=None, help='作者（默认: 从项目 .env 的 WeChatAuthor 读取，无则询问）')
+    parser.add_argument('-a', '--author', default=None, help='作者（默认: 从 openwrite.yaml 当前账号的 author 读取，无则询问）')
     parser.add_argument('--cover', default='cover.png', help='封面图片路径（默认: cover.png）')
     parser.add_argument('-d', '--digest', help='文章摘要')
+    parser.add_argument('--account', help='公众号账号名（openwrite.yaml 中 wechat.accounts 下的键；缺省用唯一账号或 default_account）')
     parser.add_argument('--interactive', action='store_true', help='交互式模式')
 
     args = parser.parse_args()
 
     try:
-        publisher = WeChatPublisher()
+        publisher = WeChatPublisher(account=args.account)
 
         # 交互式模式
         if args.interactive:
@@ -810,7 +816,7 @@ def main():
             cover = args.cover
             digest = args.digest
 
-        # 作者解析：命令行 > 项目 .env > 询问用户
+        # 作者解析：命令行 > 项目 openwrite.yaml 当前账号 > 询问用户
         if not author:
             author = publisher.author
         if not author:
@@ -818,8 +824,8 @@ def main():
             if not author:
                 print("错误: 作者名不能为空")
                 sys.exit(1)
-            # 回写到项目 .env（已被 Git 忽略）
-            save_author = input(f"是否将作者 '{author}' 保存到项目 .env？(Y/n): ").strip().lower()
+            # 回写到项目 openwrite.yaml 当前账号（已被 Git 忽略）
+            save_author = input(f"是否将作者 '{author}' 保存到 openwrite.yaml 当前账号？(Y/n): ").strip().lower()
             if save_author in ['', 'y', 'yes']:
                 publisher.save_author(author)
 

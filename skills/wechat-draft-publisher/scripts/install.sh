@@ -1,6 +1,6 @@
 #!/bin/bash
 # WeChat Draft Publisher 安装脚本
-# 凭证保存在项目根目录的 .env（已被 Git 忽略），.env.example 只是占位模板。
+# 凭证保存在项目根目录的 openwrite.yaml（已被 Git 忽略），openwrite.example.yaml 只是占位模板。
 
 set -e
 
@@ -30,7 +30,7 @@ fi
 echo "✓ 依赖检查完成"
 echo ""
 
-# 生成本地 .env（不覆盖已有文件）
+# 生成本地 openwrite.yaml（不覆盖已有文件）
 echo "→ 准备本地配置文件..."
 python3 "$PROJECT_ROOT/openwrite.py" setup
 
@@ -40,14 +40,14 @@ echo "  安装完成！"
 echo "==================================================="
 echo ""
 echo "下一步："
-echo "  1. 编辑 $PROJECT_ROOT/.env"
-echo "  2. 填写 WeChatAppID 和 WeChatAppSecret（可选 WeChatAuthor）"
+echo "  1. 编辑 $PROJECT_ROOT/openwrite.yaml"
+echo "  2. 在 wechat.accounts.<账号名> 下填写 app_id 和 app_secret（可选 author）"
 echo "     获取方式: 公众平台 → 设置与开发 → 基本配置"
 echo "  3. 如提示 IP 不在白名单，请在同一页面添加当前服务器 IP"
 echo ""
 echo "使用方法（在项目根目录执行）："
 echo "  python3 openwrite.py publish articles/<文章目录> --title \"标题\""
 echo ""
-echo "配置文件位置: $PROJECT_ROOT/.env（权限 600，已被 Git 忽略）"
-echo "Token缓存位置: $HOME/.wechat-publisher/token_cache.json"
+echo "配置文件位置: $PROJECT_ROOT/openwrite.yaml（权限 600，已被 Git 忽略）"
+echo "Token缓存位置: $HOME/.wechat-publisher/token_cache.<appid>.json（按账号隔离）"
 echo ""

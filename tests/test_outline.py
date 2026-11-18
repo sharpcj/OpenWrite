@@ -123,8 +123,8 @@ class OutlineConfigTests(unittest.TestCase):
             shutil.copy2(ROOT / name, self.project / name)
         shutil.copytree(ROOT / 'skills', self.project / 'skills')
 
-    def write_env(self, text):
-        (self.project / '.env').write_text(text, encoding='utf-8')
+    def write_config(self, text):
+        (self.project / 'openwrite.yaml').write_text(text, encoding='utf-8')
 
     def run_cli(self, *args, ok=True):
         result = subprocess.run([sys.executable, '-B', str(self.project / 'openwrite.py'), *args],
@@ -136,16 +136,16 @@ class OutlineConfigTests(unittest.TestCase):
         return result
 
     def test_flag_defaults_to_true_and_rejects_invalid_values(self):
-        self.write_env('WeChat=true\nWriterRole=SelfMediaBlogger\n')
+        self.write_config('wechat:\n  accounts:\n    主号: {}\n')
         self.assertTrue(preferences.outline_approval(self.project))
-        self.write_env('WeChat=true\nWriterRole=SelfMediaBlogger\nOutlineApproval=false\n')
+        self.write_config('defaults:\n  outline_approval: false\nwechat:\n  accounts:\n    主号: {}\n')
         self.assertFalse(preferences.outline_approval(self.project))
-        self.write_env('OutlineApproval=maybe\n')
+        self.write_config('defaults:\n  outline_approval: maybe\n')
         with self.assertRaises(ValueError):
             preferences.outline_approval(self.project)
 
     def test_config_opt_out_is_persisted_and_lets_draft_skip_outline(self):
-        self.write_env('WeChat=true\nWriterRole=SelfMediaBlogger\nOutlineApproval=false\n')
+        self.write_config('defaults:\n  outline_approval: false\nwechat:\n  accounts:\n    主号: {}\n')
         self.run_cli('new', 'auto', '--title', '自动写作')
         article = self.project / 'articles/auto'
         state = json.loads((layout.path(article, 'workflow.json')).read_text())
@@ -161,12 +161,12 @@ class OutlineConfigTests(unittest.TestCase):
         self.run_cli('workflow', 'complete', str(article), '--step', 'draft')
         self.assertFalse((layout.path(article, 'outline.json')).exists())
         # Changing the config later must not alter the saved task choice.
-        self.write_env('WeChat=true\nWriterRole=SelfMediaBlogger\nOutlineApproval=true\n')
+        self.write_config('defaults:\n  outline_approval: true\nwechat:\n  accounts:\n    主号: {}\n')
         status = self.run_cli('workflow', 'status', str(article))
         self.assertIn('标题与大纲检查点：已授权跳过', status.stdout)
 
     def test_explicit_skip_flag_overrides_enabled_config(self):
-        self.write_env('WeChat=true\nWriterRole=SelfMediaBlogger\nOutlineApproval=true\n')
+        self.write_config('defaults:\n  outline_approval: true\nwechat:\n  accounts:\n    主号: {}\n')
         self.run_cli('new', 'manual', '--title', '手动确认')
         self.assertTrue(json.loads(layout.path(self.project / 'articles/manual', 'workflow.json').read_text())['outline_approval'])
         self.run_cli('new', 'skipped', '--title', '跳过确认', '--skip-outline')

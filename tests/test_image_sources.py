@@ -40,32 +40,33 @@ class ImageConfigTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
 
-    def write_env(self, text):
-        (self.root / '.env').write_text(text, encoding='utf-8')
+    def write_sources(self, **fields):
+        lines = ['image_sources:'] + [f'  {key}: "{value}"' for key, value in fields.items()]
+        (self.root / 'openwrite.yaml').write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
-    def test_env_values_and_environment_precedence(self):
-        self.write_env('FAL_KEY=from-env-file \n COMFYUI_SERVER_URL=http://localhost:6677 # comment\n')
-        self.assertEqual(config.setting('FAL_KEY', root=self.root), 'from-env-file')
+    def test_config_values_and_environment_precedence(self):
+        self.write_sources(fal_key='from-config-file', comfyui_server_url='http://localhost:6677')
+        self.assertEqual(config.setting('FAL_KEY', root=self.root), 'from-config-file')
         with patch.dict(os.environ, {'FAL_KEY': 'from-process'}):
             self.assertEqual(config.setting('FAL_KEY', root=self.root), 'from-process')
 
     def test_comfyui_urls_local_first_and_dedup(self):
-        self.write_env('COMFYUI_SERVER_URL=http://10.0.0.5:8188, http://localhost:6677 ,http://10.0.0.5:8188\n')
+        self.write_sources(comfyui_server_url='http://10.0.0.5:8188, http://localhost:6677 ,http://10.0.0.5:8188')
         self.assertEqual(config.comfyui_urls(self.root),
                          ['http://localhost:6677', 'http://10.0.0.5:8188'])
 
     def test_comfyui_urls_default_and_legacy(self):
         self.assertEqual(config.comfyui_urls(self.root), ['http://localhost:8188'])
-        self.write_env('COMFYUI_URL=http://localhost:9999\n')
-        self.assertEqual(config.comfyui_urls(self.root), ['http://localhost:9999'])
+        with patch.object(config, 'skill_config', return_value={'comfyui_url': 'http://localhost:9999'}):
+            self.assertEqual(config.comfyui_urls(self.root), ['http://localhost:9999'])
 
     def test_invalid_comfyui_url_rejected(self):
-        self.write_env('COMFYUI_SERVER_URL=localhost:6677\n')
+        self.write_sources(comfyui_server_url='localhost:6677')
         with self.assertRaises(ValueError):
             config.comfyui_urls(self.root)
 
     def test_backend_key_aliases(self):
-        self.write_env('FAL_AI_API_KEY=alias-key\n')
+        self.write_sources(fal_ai_api_key='alias-key')
         self.assertEqual(config.backend_key('fal', self.root), 'alias-key')
         self.assertEqual(config.backend_key('pexels', self.root), '')
 

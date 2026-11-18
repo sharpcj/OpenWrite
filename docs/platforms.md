@@ -27,7 +27,7 @@ OpenWrite 的流程秩序是平台中立的，产物形态按平台分派。本�
 | `content_images` | 正文图是否必需、最少/最多张数 |
 | `limits` | 标题字符/字节、作者字节、摘要字节、封面字节上限；`null` 表示不校验 |
 | `checks` | 平台专属检查开关（如代码块是否必须转换） |
-| `author_key` / `credential_keys` | 作者名对应的凭证键（无作者概念时为 `null`）与所需凭证键 |
+| `author_key` / `credential_keys` | 作者名与所需凭证的内部映射键名（如 `WeChatAuthor`，无作者概念时为 `null`）；实际取值来自 `openwrite.yaml` 对应账号的字段 |
 | `unverified` | 尚未取得权威来源、暂不写入 `limits` 的项 |
 
 辅助函数：`spec(platform)`、`for_state(state)`、`require_pipeline(state)`、`writer_skill(state)`、`limits(state)`。
@@ -48,7 +48,7 @@ OpenWrite 的流程秩序是平台中立的，产物形态按平台分派。本�
 - 标题 ≤64 字符 / 192 字节，作者 ≤20 字节，摘要 ≤120 字节，封面 PNG <2MB。
 - 正文配图可选，可为零张，但必须在 `content-images.json` 记录决策与理由。
 - 代码块必须转换为微信兼容格式（检查 HTML 中不得残留 `<pre`）。
-- 发布走官方 API，凭证为 `.env` 的 `WeChatAppID` / `WeChatAppSecret` / `WeChatAuthor`。
+- 发布走官方 API，凭证为 `openwrite.yaml` 中 `wechat.accounts.<账号名>` 的 `app_id` / `app_secret` / `author`，按任务账号读取；支持多账号。
 
 ### 小红书（写作、卡片产物与发布均已实现）
 
@@ -60,7 +60,7 @@ OpenWrite 的流程秩序是平台中立的，产物形态按平台分派。本�
 - 常规图文笔记正文 ≤1000 字（话题以 `#名称[话题]#` 计入）、单篇图片 ≤18 张（封面 + 内容，注册表 `content_images.max: 17`）。多个公开来源一致；「长文笔记」6000 字为另一内测功能，不适用本组图形态。
 - 一页一个观点；有截图时减少文字并给足截图面积。
 - **张数由内容动态决定**（注册表 `min: 1`、`max: 17`），不固定 4~8 张。
-- 发布凭证为创作服务平台 Cookie（`XhsCreatorCookie`，需含 `a1` 与登录凭证），默认「仅自己可见」，公开需显式授权。
+- 发布凭证为创作服务平台 Cookie（`openwrite.yaml` 中 `rednote.accounts.<账号名>.cookie`，需含 `a1` 与登录凭证），默认「仅自己可见」，公开需显式授权。
 
 与微信的两处语义差异（已实现）：
 
@@ -96,7 +96,7 @@ def render_<platform>(directory: Path, state: dict, args: argparse.Namespace, st
 2. 实现写作 Skill（或复用现有视角 Skill + 平台表达规格）。
 3. 渲染二选一：单文件产物 → 实现渲染函数并注册到 `openwrite.RENDERERS`；组图产物 → 复用 `openwrite-images` 的 `html` 后端，置 `rendered_artifact: null`。
 4. 实现发布 Skill，登记 `publisher` 与 `publisher_entry`，并置 `publish_implemented: true`。
-5. 在 `preferences` 增加平台键与凭证键；`setup` 模板补占位项。
+5. 在 `preferences` 增加平台键与凭证键；`setup` 模板（`openwrite.example.yaml`）补占位项。
 6. 补测试：规格、门禁拒绝、产物指纹、可发布性检查、端到端。
 7. 写作链路通过后置 `implemented: true`；上传链路通过后再置 `publish_implemented: true`，并更新 `AGENT_GUIDE.md`、README 与本文件。
 
@@ -127,7 +127,7 @@ articles/<名称>/
 ## 分阶段路线
 
 - **P0｜写作 + 卡片产物（不含自动上传）**：✅ 已完成。注册表分派 → `rednote-note-writer` → `html` 后端渲染卡片 → 第七步组装与校验 → `publish-manifest.json`。
-- **P1｜发布适配器**：✅ 已完成。`XhsCreatorCookie` 配置、`--dry-run` 预演、默认仅自己可见（失败即中止）、`--public` 显式授权、失败截图与可恢复重试；`publish_implemented: true`。实现为独立编写的 Playwright 发布页自动化（站点自身签名，不引入 Node.js）；UI 流程用本地模拟页做端到端测试，真实账号首次使用建议先私密实测。
+- **P1｜发布适配器**：✅ 已完成。账号 Cookie 配置（`rednote.accounts.<账号名>.cookie`）、`--dry-run` 预演、默认仅自己可见（失败即中止）、`--public` 显式授权、失败截图与可恢复重试；`publish_implemented: true`。实现为独立编写的 Playwright 发布页自动化（站点自身签名，不引入 Node.js）；UI 流程用本地模拟页做端到端测试，真实账号首次使用建议先私密实测。
 - **P2｜运营增强（可选）**：选题灵感、爆款拆解、知识库沉淀。
 
 ## 风险与许可证

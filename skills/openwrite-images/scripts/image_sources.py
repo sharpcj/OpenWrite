@@ -4,9 +4,9 @@
 Backends:
 - fal      : fal.ai queue API (FLUX / Recraft), key FAL_KEY or FAL_AI_API_KEY.
 - hunyuan  : Tencent Hunyuan via TokenHub (Bearer), key TENCENT_TOKENHUB_API_KEY.
-- pexels / pixabay / unsplash : free stock search + download, keys in .env.
+- pexels / pixabay / unsplash : free stock search + download, keys in openwrite.yaml image_sources.
 
-All addresses and keys come from image_config (.env / environment); model
+All addresses and keys come from image_config (openwrite.yaml / environment); model
 choices come from config.json. Functions return a local file plus provenance
 metadata; produce.py performs the final decode and dimension checks.
 """
@@ -41,7 +41,7 @@ def _require_key(backend: str) -> str:
     key = image_config.backend_key(backend)
     if not key:
         keys = ' 或 '.join(image_config.BACKEND_KEYS[backend])
-        raise ValueError(f'{backend} 未配置密钥；请在项目 .env 填写 {keys}')
+        raise ValueError(f'{backend} 未配置密钥；请在 openwrite.yaml 的 image_sources 填写对应字段（或设置环境变量 {keys}）')
     return key
 
 

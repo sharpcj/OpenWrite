@@ -47,8 +47,8 @@ def _load_sibling(name: str):
 
 image_config = _load_sibling('image_config')
 
-# 配置加载优先级：环境变量 > 项目 .env > skill 内 config.json > 内置默认值。
-# 服务地址与密钥只来自 .env / 环境变量；config.json 只保留模型与规则。
+# 配置加载优先级：环境变量 > openwrite.yaml image_sources > skill 内 config.json > 内置默认值。
+# 服务地址与密钥只来自 openwrite.yaml image_sources / 环境变量；config.json 只保留模型与规则。
 _DEFAULTS = {
     "comfyui_output_dir": os.path.expanduser("~/comfyui_output"),
     "default_profile": "auto",
@@ -100,7 +100,7 @@ def _load_config() -> dict:
     except (FileNotFoundError, json.JSONDecodeError):
         pass
 
-    # 环境变量 / .env 优先级最高
+    # 环境变量 / openwrite.yaml 优先级最高
     cfg["comfyui_output_dir"] = image_config.setting(
         "COMFYUI_OUTPUT_DIR", cfg["comfyui_output_dir"]
     )
@@ -149,7 +149,7 @@ def server_url() -> str:
             errors.append(f"{url}（{getattr(exc, 'reason', exc)}）")
     raise ValueError(
         "配置的 ComfyUI 地址均不可达：" + "；".join(errors)
-        + "。请启动服务或修改 .env 的 COMFYUI_SERVER_URL"
+        + "。请启动服务或修改 openwrite.yaml 的 image_sources.comfyui_server_url"
     )
 
 

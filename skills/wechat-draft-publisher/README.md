@@ -21,21 +21,26 @@ pip install requests
 
 ### 2. 配置微信公众号凭证
 
-在项目根目录生成本地配置（复制 `.env.example` 为 `.env`，已存在则不覆盖）：
+在项目根目录生成本地配置（复制 `openwrite.example.yaml` 为 `openwrite.yaml`，已存在则不覆盖）：
 
 ```bash
 python3 openwrite.py setup
 ```
 
-编辑项目根目录的 `.env`，填入你的AppID和AppSecret：
+编辑项目根目录的 `openwrite.yaml`，在 `wechat.accounts.<账号名>` 下填入 AppID 和 AppSecret（可维护多个公众号账号；每个账号可用可选 `name` 填写公众号名便于识别）：
 
-```dotenv
-WeChatAppID=wx1234567890abcdef
-WeChatAppSecret=你的_appsecret
-WeChatAuthor=你的作者名
+```yaml
+wechat:
+  default_account: 账号1
+  accounts:
+    账号1:
+      name: ""            # 公众号名，用户填写
+      app_id: wx1234567890abcdef
+      app_secret: 你的_appsecret
+      author: 你的作者名
 ```
 
-`.env` 已被 `.gitignore` 忽略，`setup` 会将其权限设为 600。`.env.example` 只是被 Git 跟踪的占位模板，不要写入真实密钥。
+`openwrite.yaml` 已被 `.gitignore` 忽略，`setup` 会将其权限设为 600。`openwrite.example.yaml` 只是被 Git 跟踪的占位模板，不要写入真实密钥。
 
 **如何获取AppID和AppSecret？**
 
@@ -102,6 +107,7 @@ python3 publisher.py --interactive
 | `--author` | `-a` | 作者名称 | ❌ |
 | `--cover` | - | 封面图片路径 | ❌ |
 | `--digest` | `-d` | 文章摘要 | ❌ |
+| `--account` | - | 公众号账号名（缺省用唯一账号或 default_account） | ❌ |
 | `--interactive` | - | 交互式模式 | ❌ |
 
 ## 工作流程
@@ -148,7 +154,7 @@ python3 publisher.py --interactive
 ```bash
 # 在项目根目录执行
 python3 openwrite.py setup
-# 然后编辑 .env，填写 WeChatAppID 和 WeChatAppSecret
+# 然后编辑 openwrite.yaml，在 wechat.accounts.<账号名> 下填写 app_id 和 app_secret
 ```
 
 ### Q2: 报错"获取access_token失败"
@@ -174,7 +180,7 @@ python3 openwrite.py setup
 
 ### Q4: token缓存在哪里？
 
-缓存文件：`~/.wechat-publisher/token_cache.json`
+缓存文件：`~/.wechat-publisher/token_cache.<appid>.json`（按 AppID 隔离，多账号不串用）
 
 包含：
 - `access_token`: token值
@@ -192,8 +198,8 @@ wechat-draft-publisher/
 └── README.md                         # 使用文档
 
 项目根目录/
-├── .env.example                      # 配置占位模板（被Git跟踪）
-└── .env                              # 真实凭证（setup生成，Git忽略）
+├── openwrite.example.yaml            # 配置占位模板（被Git跟踪）
+└── openwrite.yaml                    # 真实凭证（setup生成，Git忽略）
 ```
 
 ## 技术说明
@@ -209,16 +215,16 @@ wechat-draft-publisher/
 
 1. **保护配置文件**
    ```bash
-   chmod 600 .env   # openwrite.py setup 已自动设置
+   chmod 600 openwrite.yaml   # openwrite.py setup 已自动设置
    ```
 
 2. **不要提交真实凭证到版本控制**
-   - 项目 `.gitignore` 已忽略 `.env`，只跟踪占位模板 `.env.example`
-   - 不要把 AppID/AppSecret 写入 `.env.example`、文档或提交信息
+   - 项目 `.gitignore` 已忽略 `openwrite.yaml`，只跟踪占位模板 `openwrite.example.yaml`
+   - 不要把 AppID/AppSecret 写入 `openwrite.example.yaml`、文档或提交信息
 
 3. **定期轮换AppSecret**
    - 在微信公众平台重置AppSecret
-   - 更新项目 `.env` 中的 `WeChatAppSecret`
+   - 更新 `openwrite.yaml` 中对应账号的 `app_secret`
 
 ## 更新日志
 

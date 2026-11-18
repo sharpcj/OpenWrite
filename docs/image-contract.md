@@ -4,7 +4,7 @@
 
 ## 来源评估与优先级
 
-图片来源分四类：本地/远程 ComfyUI、在线 AI 生图（fal.ai / 腾讯混元 TokenHub）、官方文档插图、免费图库（Pexels / Pixabay / Unsplash）。地址与密钥配置在项目根 `.env`，见 [后端配置](../skills/openwrite-images/references/api-configuration.md)。
+图片来源分四类：本地/远程 ComfyUI、在线 AI 生图（fal.ai / 腾讯混元 TokenHub）、官方文档插图、免费图库（Pexels / Pixabay / Unsplash）。地址与密钥配置在项目根 `openwrite.yaml` 的 `image_sources` 节，见 [后端配置](../skills/openwrite-images/references/api-configuration.md)。
 
 写作侧按内容评估每张图适合的来源，用 `preferred_sources` 声明偏好顺序；未声明时按默认优先级执行，`--backend auto` 逐个尝试、失败自动回退：
 
@@ -122,4 +122,4 @@
 
 ## 微信封面三维样式
 
-项目 `.env` 的版式、视觉风格、色调在创建任务时存入 `workflow.json.cover_style`。独立图片能力将该快照解析为有效需求，工作流使用同一有效需求校验指纹。写作侧应以快照为准，不在画面描述中写入冲突的风格和构图。左文右图底图留白，标题和关键词句通过 `overlay` 叠字，`text` 置空。原始需求文件保留，实际执行需求由解析器统一确定。详见 [封面样式](cover-style.md)。
+项目 `openwrite.yaml` 中任务账号的封面版式、视觉风格、色调在创建任务时存入 `workflow.json.cover_style`。独立图片能力将该快照解析为有效需求，工作流使用同一有效需求校验指纹。写作侧应以快照为准，不在画面描述中写入冲突的风格和构图。左文右图底图留白，标题和关键词句通过 `overlay` 叠字，`text` 置空。原始需求文件保留，实际执行需求由解析器统一确定。详见 [封面样式](cover-style.md)。

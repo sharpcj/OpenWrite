@@ -51,15 +51,18 @@ def new_article(args: argparse.Namespace) -> int:
     if '\n' in title or '\r' in title:
         raise ValueError('文章标题不能包含换行')
     selection = preferences.resolve(ROOT, getattr(args, 'platform', None),
-                                    getattr(args, 'perspective', None) or getattr(args, 'type', None))
-    cover = task_cover_style(args, selection['platform'])
+                                    getattr(args, 'perspective', None) or getattr(args, 'type', None),
+                                    getattr(args, 'account', None))
+    cover = task_cover_style(args, selection)
     directory = ROOT / 'articles' / args.name
     directory.mkdir(parents=True, exist_ok=False)
     perspective = preferences.PERSPECTIVE_LABELS[selection['perspective']]
     platform_label = preferences.PLATFORM_LABELS[selection['platform']]
-    checkpoint = outline_checkpoint(args)
+    checkpoint = outline_checkpoint(args, selection)
+    account_line = f'- 账号：{selection["account"]}\n' if selection.get('account') else ''
     (layout.path(directory, 'brief.md')).write_text(
         f'# 创作需求\n\n- 主题：{title}\n- 平台：{platform_label}\n- 视角：{perspective}\n'
+        f'{account_line}'
         f'- 标题与大纲确认：{"需要用户确认" if checkpoint else "用户已授权跳过"}\n'
         '- 受众：待根据任务补充\n- 当前阶段：工作区已创建，正文待写\n'
         '\n## 用户要求\n\n## 资料与事实依据\n\n## 配图提示词与待办\n',
@@ -69,9 +72,10 @@ def new_article(args: argparse.Namespace) -> int:
     (layout.path(directory, 'analysis.md')).write_text('# 资料分析\n', encoding='utf-8')
     workflow.write_json(layout.path(directory, 'sources.json'), {'version': 1, 'sources': []})
     workflow.initialize(directory, title, selection['perspective'], selection['platform'],
-                        selection['selection_source'], checkpoint, cover)
+                        selection['selection_source'], checkpoint, cover, selection.get('account'))
     print(f'已创建文章工作区：{directory}')
-    print(f'本次任务：{platform_label} / {perspective}')
+    print(f'本次任务：{platform_label} / {perspective}'
+          + (f' / 账号 {selection["account"]}' if selection.get('account') else ''))
     if cover:
         print('封面样式：' + json.dumps(cover, ensure_ascii=False))
     print(f'标题与大纲检查点：{"开启，写正文前需用户确认" if checkpoint else "已授权跳过"}')
@@ -97,27 +101,27 @@ def autostart_board() -> None:
         print(f'看板已在运行：{url}（已打开默认浏览器）')
 
 
-def task_cover_style(args: argparse.Namespace, platform: str) -> dict:
+def task_cover_style(args: argparse.Namespace, selection: dict) -> dict:
     fields = ('cover_layout', 'cover_visual_style', 'cover_color_tone')
     supplied = [getattr(args, name, None) for name in fields]
-    if platform != platforms.WECHAT:
+    if selection['platform'] != platforms.WECHAT:
         if any(value is not None for value in supplied):
-            raise ValueError('WeChatCover 三个配置维度目前仅用于微信封面')
+            raise ValueError('封面样式三个配置维度目前仅用于微信封面')
         return {}
-    return preferences.cover_style(ROOT, *supplied)
+    return preferences.cover_style(ROOT, *supplied, account=selection.get('account'))
 
 
 def add_cover_arguments(command):
-    command.add_argument('--cover-layout', help='本次微信封面版式，覆盖 WeChatCoverLayout')
-    command.add_argument('--cover-visual-style', help='本次封面视觉风格，覆盖 WeChatCoverVisualStyle')
-    command.add_argument('--cover-color-tone', help='本次封面色调，覆盖 WeChatCoverColorTone')
+    command.add_argument('--cover-layout', help='本次微信封面版式，覆盖账号配置 cover.layout')
+    command.add_argument('--cover-visual-style', help='本次封面视觉风格，覆盖账号配置 cover.visual_style')
+    command.add_argument('--cover-color-tone', help='本次封面色调，覆盖账号配置 cover.color_tone')
 
 
-def outline_checkpoint(args: argparse.Namespace) -> bool:
-    """Per-task authorization wins; otherwise use the .env feature flag."""
+def outline_checkpoint(args: argparse.Namespace, selection: dict) -> bool:
+    """Per-task authorization wins; otherwise use the account/defaults feature flag."""
     if getattr(args, 'skip_outline', False):
         return False
-    return preferences.outline_approval(ROOT)
+    return preferences.outline_approval(ROOT, selection.get('platform'), selection.get('account'))
 
 
 def article_directory(value: str) -> Path:
@@ -219,6 +223,9 @@ def publish_article(args: argparse.Namespace) -> int:
     author = args.author if args.author is not None else manifest.get('author') or None
     digest = args.digest if args.digest is not None else manifest.get('digest') or None
     arguments = ['--title', title, '--content', str(content), '--cover', str(cover)]
+    account = workflow.load(directory).get('account')
+    if account:
+        arguments.extend(['--account', account])
     if author:
         arguments.extend(['--author', author])
     if digest:
@@ -238,6 +245,9 @@ def publish_card_set(args: argparse.Namespace, directory: Path, manifest: dict, 
     arguments = ['--title', args.title or manifest['title'],
                  '--desc', manifest['desc'], '--images', *(str(path) for path in images),
                  '--project-root', str(ROOT), '--artifact-dir', str(directory)]
+    account = workflow.load(directory).get('account')
+    if account:
+        arguments.extend(['--account', account])
     if manifest.get('topics'):
         arguments.extend(['--topics', *manifest['topics']])
     if args.public:
@@ -272,11 +282,12 @@ def image_article(args: argparse.Namespace) -> int:
 def workflow_command(args: argparse.Namespace) -> int:
     directory = article_directory(args.article)
     if args.operation == 'init':
-        selection = preferences.resolve(ROOT, args.platform, args.perspective or args.type)
-        cover = task_cover_style(args, selection['platform'])
+        selection = preferences.resolve(ROOT, args.platform, args.perspective or args.type,
+                                        getattr(args, 'account', None))
+        cover = task_cover_style(args, selection)
         workflow.initialize(directory, args.title or directory.name, selection['perspective'],
                             selection['platform'], selection['selection_source'],
-                            outline_checkpoint(args), cover)
+                            outline_checkpoint(args, selection), cover, selection.get('account'))
         autostart_board()
     elif args.operation == 'cover-style':
         state = workflow.load(directory)
@@ -306,6 +317,8 @@ def workflow_command(args: argparse.Namespace) -> int:
     platform = preferences.task_platform(state)
     perspective = preferences.task_perspective(state)
     print(f'任务平台：{preferences.PLATFORM_LABELS.get(platform, platform)}；写作视角：{preferences.PERSPECTIVE_LABELS.get(perspective, perspective)}')
+    if state.get('account'):
+        print(f'任务账号：{state["account"]}')
     print(f'标题与大纲检查点：{"开启" if workflow.outline_required(state) else "已授权跳过"}')
     if state.get('cover_style'):
         print('封面样式：' + json.dumps(state['cover_style'], ensure_ascii=False))
@@ -358,22 +371,25 @@ def board_command(args: argparse.Namespace) -> int:
 
 
 def setup_command(args: argparse.Namespace) -> int:
-    target, created = preferences.init_env(ROOT)
+    target, created = preferences.init_config(ROOT)
     if created:
         print(f'已创建本地配置：{target}（权限 600，已被 Git 忽略）')
     else:
         print(f'本地配置已存在，未覆盖：{target}')
-    print('请编辑该文件填写 WeChatAppID、WeChatAppSecret，可选 WeChatAuthor。')
+    print('请编辑该文件：在 wechat.accounts / rednote.accounts 下维护账号与凭证，'
+          'defaults 配置写作视角与检查点，image_sources 配置配图来源。')
     print(f'{preferences.TEMPLATE_NAME} 只是占位模板，不要把真实密钥写入或提交。')
     return 0
 
 
 def preference_command(args: argparse.Namespace) -> int:
-    selection = preferences.resolve(ROOT, args.platform, args.perspective)
+    selection = preferences.resolve(ROOT, args.platform, args.perspective,
+                                    getattr(args, 'account', None))
     if selection['platform'] == platforms.WECHAT:
-        selection['cover_style'] = preferences.cover_style(ROOT)
+        selection['cover_style'] = preferences.cover_style(ROOT, account=selection.get('account'))
     print(json.dumps(selection, ensure_ascii=False, indent=2))
-    print(f'OutlineApproval（标题与大纲确认检查点）：{preferences.outline_approval(ROOT)}')
+    print(f'OutlineApproval（标题与大纲确认检查点）：'
+          f'{preferences.outline_approval(ROOT, selection["platform"], selection.get("account"))}')
     profile = platforms.spec(selection['platform'])
     if not profile['implemented']:
         print(f'{profile["label"]}选择可记录；对应创作与发布能力尚未适配。', file=sys.stderr)
@@ -419,16 +435,23 @@ def doctor(args: argparse.Namespace) -> int:
     for label, passed in checks:
         print(f'{"OK" if passed else "MISSING"}  {label}')
     print('仅检查本地环境；未连接 ComfyUI 或微信，也未读取微信凭证。')
-    values = preferences.read_values(ROOT)
-    comfy = values.get('COMFYUI_SERVER_URL', '').strip() or 'http://localhost:8188（默认）'
-    print(f'配图来源（.env）：ComfyUI {comfy}')
-    for label, keys in (('fal.ai', ('FAL_KEY', 'FAL_AI_API_KEY')),
-                        ('腾讯混元 TokenHub', ('TENCENT_TOKENHUB_API_KEY',)),
-                        ('Pexels', ('PEXELS_API_KEY',)),
-                        ('Pixabay', ('PIXABAY_API_KEY',)),
-                        ('Unsplash', ('UNSPLASH_ACCESS_KEY',))):
+    values = preferences.image_values(ROOT)
+    comfy = values.get('comfyui_server_url', '').strip() or 'http://localhost:8188（默认）'
+    print(f'配图来源（{preferences.CONFIG_NAME}）：ComfyUI {comfy}')
+    for label, keys in (('fal.ai', ('fal_key', 'fal_ai_api_key')),
+                        ('腾讯混元 TokenHub', ('tencent_tokenhub_api_key',)),
+                        ('Pexels', ('pexels_api_key',)),
+                        ('Pixabay', ('pixabay_api_key',)),
+                        ('Unsplash', ('unsplash_access_key',))):
         configured = any(values.get(key, '').strip() for key in keys)
         print(f'  {"已配置" if configured else "未配置"}  {label}')
+    config = preferences.read_config(ROOT)
+    for label, platform in preferences.PLATFORMS.items():
+        accounts = (config.get(platform) or {}).get('accounts', {})
+        if accounts:
+            shown = [f'{name}（{fields["name"]}）' if fields.get('name') else name
+                     for name, fields in accounts.items()]
+            print(f'{preferences.PLATFORM_LABELS[platform]}账号：{"、".join(shown)}')
     planned = [profile['label'] for profile in platforms.REGISTRY.values() if not profile['implemented']]
     if planned:
         print(f'平台适配器尚未实现：{"、".join(planned)}（可选择并记录，不能推进创作流程）。')
@@ -439,8 +462,8 @@ def doctor(args: argparse.Namespace) -> int:
     if any(profile['implemented'] and profile['rendered_artifact'] is None
            for profile in platforms.REGISTRY.values()):
         print(f'卡片渲染：{_card_runtime_status()}')
-    if not (ROOT / preferences.ENV_NAME).exists():
-        print(f'提示：上传草稿前运行 python3 openwrite.py setup 生成 {preferences.ENV_NAME} 并填写微信凭证。')
+    if not (ROOT / preferences.CONFIG_NAME).exists():
+        print(f'提示：上传草稿前运行 .venv/bin/python openwrite.py setup 生成 {preferences.CONFIG_NAME} 并填写账号凭证。')
     if not all(passed for _, passed in checks):
         print('缺少依赖时运行：python3 -m pip install -r requirements.txt')
         return 1
@@ -454,6 +477,7 @@ def main(argv: list[str] | None = None) -> int:
     new.add_argument('name', help='文章目录名，位于项目 articles/ 下')
     new.add_argument('--title', help='文章初始标题')
     new.add_argument('--platform', choices=tuple(platforms.REGISTRY), default=None)
+    new.add_argument('--account', help='本次使用的平台账号名（openwrite.yaml 中 accounts 下的键）')
     views = new.add_mutually_exclusive_group()
     views.add_argument('--perspective', choices=tuple(preferences.PERSPECTIVE_LABELS), default=None)
     views.add_argument('--type', choices=['tech', 'product'], default=None, help='旧版视角参数，兼容 --perspective')
@@ -471,6 +495,7 @@ def main(argv: list[str] | None = None) -> int:
         if operation == 'init':
             command.add_argument('--title')
             command.add_argument('--platform', choices=tuple(platforms.REGISTRY), default=None)
+            command.add_argument('--account', help='本次使用的平台账号名（openwrite.yaml 中 accounts 下的键）')
             views = command.add_mutually_exclusive_group()
             views.add_argument('--perspective', choices=tuple(preferences.PERSPECTIVE_LABELS), default=None)
             views.add_argument('--type', choices=['tech', 'product'], default=None)
@@ -481,10 +506,11 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument('--note', help='图片验收记录')
         elif operation == 'reset':
             command.add_argument('--from', dest='from_step', choices=workflow.STEPS, required=True)
-    setup = commands.add_parser('setup', help='复制 .env.example 为本地 .env，用于填写微信凭证与流程配置')
+    setup = commands.add_parser('setup', help='复制 openwrite.example.yaml 为本地 openwrite.yaml，维护平台账号、凭证与流程配置')
     setup.set_defaults(action=setup_command)
-    defaults = commands.add_parser('preferences', help='解析本次平台和视角，不创建任务')
+    defaults = commands.add_parser('preferences', help='解析本次平台、账号和视角，不创建任务')
     defaults.add_argument('--platform', choices=tuple(platforms.REGISTRY), default=None)
+    defaults.add_argument('--account', help='本次使用的平台账号名')
     defaults.add_argument('--perspective', choices=tuple(preferences.PERSPECTIVE_LABELS), default=None)
     defaults.set_defaults(action=preference_command)
     check = commands.add_parser('doctor', help='检查本地依赖、Skill 及模板，不联网')
@@ -516,7 +542,7 @@ def main(argv: list[str] | None = None) -> int:
     publish = commands.add_parser('publish', help='将指定文章上传到微信草稿箱（会调用微信 API）')
     publish.add_argument('article', help='文章目录路径，相对于当前工作目录')
     publish.add_argument('--title', help='默认使用 publish-manifest.json 中已确认的标题')
-    publish.add_argument('--author', help='默认使用清单作者（来自 .env 的 WeChatAuthor）')
+    publish.add_argument('--author', help='默认使用清单作者（来自任务账号的 author 配置）')
     publish.add_argument('--digest', help='默认使用清单摘要')
     publish.add_argument('--public', action='store_true',
                          help='小红书公开发布；默认仅自己可见，公开需用户明确授权')

@@ -15,7 +15,7 @@ make setup
 make doctor
 ```
 
-`make setup` 创建或复用 `.venv`，优先使用已安装的 uv，否则使用 venv/pip 安装 `requirements.txt`，然后调用 `openwrite.py setup` 生成 `.env`。已有 `.env` 不覆盖，不向系统 Python 安装依赖，不填写密钥、不生图、不发布。依赖安装需要网络，无需手动激活虚拟环境。
+`make setup` 创建或复用 `.venv`，优先使用已安装的 uv，否则使用 venv/pip 安装 `requirements.txt`，然后调用 `openwrite.py setup` 生成 `openwrite.yaml`。已有 `openwrite.yaml` 不覆盖，不向系统 Python 安装依赖，不填写密钥、不生图、不发布。依赖安装需要网络，无需手动激活虚拟环境。
 
 缺少工具时，Ubuntu/Debian 可先安装 `make python3 python3-venv`；macOS 的 Make 可通过 Xcode Command Line Tools（`xcode-select --install`）获取。
 
@@ -53,31 +53,38 @@ $env:OPENWRITE_BOARD_AUTO = "0"
 
 ## 配置与凭证
 
-`openwrite.py setup` 只将 `.env.example` 复制为本地 `.env`，不联网；新文件权限为 600，已被 Git 忽略。已有配置不会覆盖，也不会自动补入模板的新字段，需自行添加。不要把真实凭证写入模板或提交仓库。
+`openwrite.py setup` 只将 `openwrite.example.yaml` 复制为本地 `openwrite.yaml`，不联网；新文件权限为 600，已被 Git 忽略。已有配置不会覆盖，也不会自动补入模板的新字段，需自行添加。不要把真实凭证写入模板或提交仓库。
+
+配置为嵌套 YAML，按 `defaults → 平台节（wechat/rednote）→ accounts.<账号名> → 任务快照` 四层合并，后者覆盖前者。每个平台可维护多个账号，账号间凭证、视角与封面样式互相隔离。
 
 | 配置内容 | 说明文档 |
 |---|---|
-| 平台、`WriterRole` 与 `OutlineApproval` | [平台与视角选择](task-selection.md) |
-| 微信封面版式、视觉风格与色调 | [封面样式](cover-style.md) |
-| ComfyUI、在线生图与图库服务地址/密钥 | [图片后端配置](../skills/openwrite-images/references/api-configuration.md) |
+| 平台、账号、`defaults.writer_role` 与 `defaults.outline_approval` | [平台与视角选择](task-selection.md) |
+| 微信账号封面版式、视觉风格与色调（`cover`） | [封面样式](cover-style.md) |
+| ComfyUI、在线生图与图库服务地址/密钥（`image_sources`） | [图片后端配置](../skills/openwrite-images/references/api-configuration.md) |
 
-平台、视角与流程开关只读本地 `.env`，模板不参与运行时解析；图片后端允许进程环境变量覆盖 `.env` 同名配置。`skills/openwrite-images/config.json` 保存模型档案、来源优先级、输出目录与叠字默认值，不放密钥。
+平台、视角与流程开关只读本地 `openwrite.yaml`（`yaml.safe_load` 解析并校验固定结构），模板不参与运行时解析；图片后端允许进程环境变量（如 `FAL_KEY`）覆盖 `image_sources` 同名字段。`skills/openwrite-images/config.json` 保存模型档案、来源优先级、输出目录与叠字默认值，不放密钥。
 
 ### 微信草稿上传
 
-在 `.env` 填写：
+在 `openwrite.yaml` 的 `wechat.accounts.<账号名>` 下填写：
 
-```dotenv
-WeChatAppID=你的_appid
-WeChatAppSecret=你的_appsecret
-WeChatAuthor=你的作者名
+```yaml
+wechat:
+  default_account: 账号1        # 多账号时的缺省账号；单账号可省略
+  accounts:
+    账号1:
+      name: ""                  # 公众号名，用户填写
+      app_id: 你的_appid
+      app_secret: 你的_appsecret
+      author: 你的作者名        # 可选
 ```
 
-`WeChatAuthor` 可选。未配置必需凭证时，入口在调用微信 API 前报错。发布器不读取旧 `~/.wechat-publisher/config.json`；access_token 缓存仍在 `~/.wechat-publisher/token_cache.json`。上传只是创建草稿，最终群发在微信后台操作。执行前按 [发布协议](workflow.md#发布) 核对产物与授权。
+`name` 可选，由用户填写公众号名，便于识别对应哪个公众号；账号键名（如 `账号1`）才是 `--account` 与任务快照使用的标识符。`author` 可选。未配置必需凭证时，入口在调用微信 API 前报错。发布器不读取旧 `~/.wechat-publisher/config.json`；access_token 按 AppID 分别缓存于 `~/.wechat-publisher/token_cache.<appid>.json`，多账号不串用。上传只是创建草稿，最终群发在微信后台操作。执行前按 [发布协议](workflow.md#发布) 核对产物与授权。
 
 ### 小红书发布
 
-在 `.env` 填写 `XhsCreatorCookie`，值为登录 [创作服务平台](https://creator.xiaohongshu.com) 后取得的完整 Cookie，需含 `a1` 与登录凭证。未配置时在启动浏览器前报错；Cookie 过期需更新，发布失败不代表已经发布。
+在 `openwrite.yaml` 的 `rednote.accounts.<账号名>` 下填写 `cookie`，值为登录 [创作服务平台](https://creator.xiaohongshu.com) 后取得的完整 Cookie，需含 `a1` 与登录凭证。每个账号可用可选 `name` 填写账号名，便于识别对应哪个小红书号。未配置时在启动浏览器前报错；Cookie 过期需更新，发布失败不代表已经发布。
 
 发布默认仅自己可见；公开需用户明确授权并使用 `--public`。`--dry-run` 只做本地校验，不登录、不上传、不发布。命令与成功记录见 [发布协议](workflow.md#发布)，浏览器执行细节见 [发布 Skill](../skills/rednote-publisher/SKILL.md)。
 
@@ -118,7 +125,7 @@ WeChatAuthor=你的作者名
 
 默认地址为 `http://127.0.0.1:8765`，仅绑定本机。`new` / `workflow init` 成功后自动后台启动或复用看板，并打开默认浏览器；设置进程环境变量 `OPENWRITE_BOARD_AUTO=0` 可关闭自动行为。`--stop` 停止指定端口的后台进程，非默认端口同时传 `--port`。
 
-左侧任务列表支持分页、日期范围与平台过滤，默认按创建日期倒序；右侧显示选中任务的七步进展和交付件预览。页面每两秒刷新，只读，不修改任务状态、不读取凭证。新任务记录 `created_at`，旧任务回退到状态文件时间。
+左侧自上而下为：全局统计（已创建微信/小红书任务总数，不受下方过滤影响）、两个账号占比饼图（微信/小红书各账号文章占比，旧文章归入「未指定账号」）、平台与账号选择器（默认微信、账号1，账号名优先显示公众号名 `name`）、日期范围，以及过滤后的任务列表（分页、按创建日期倒序，列表项不再显示平台）。右侧显示选中任务的七步进展和交付件预览。页面每两秒刷新，只读，不修改任务状态、不读取凭证。新任务记录 `created_at`，旧任务回退到状态文件时间。
 
 ## 本地检查与排错
 
@@ -132,4 +139,4 @@ WeChatAuthor=你的作者名
 | 原生 Windows 新建任务触发 `fcntl` 错误 | 关闭自动看板后按 `workflow status` 检查已建任务，避免重复创建 |
 | 产物指纹过期 | 按错误提示从最早受影响阶段 `workflow reset --from`，详见 [返工与恢复](workflow.md#返工与恢复) |
 | 图片尺寸或构图不符 | 核对 `--fit` 的默认行为与需求尺寸，详见 [图片 Skill](../skills/openwrite-images/SKILL.md) |
-| 发布凭证缺失或失效 | 在 `.env` 补全或更新对应平台凭证，重新检查，未见成功信号不视为发布成功 |
+| 发布凭证缺失或失效 | 在 `openwrite.yaml` 补全或更新对应平台账号凭证，重新检查，未见成功信号不视为发布成功 |

@@ -75,7 +75,7 @@ class GeminiImageGenerator(ImageGenerator):
     def _get_api_key(self) -> str:
         api_key = image_config.setting('GEMINI_API_KEY') or image_config.setting('GOOGLE_API_KEY')
         if not api_key:
-            raise ValueError("请在项目 .env 或环境变量设置 GEMINI_API_KEY 或 GOOGLE_API_KEY")
+            raise ValueError("请在 openwrite.yaml 的 image_sources 设置 gemini_api_key/google_api_key，或环境变量 GEMINI_API_KEY/GOOGLE_API_KEY")
         return api_key
 
     def generate(self, prompt: str, output_path: str, **kwargs) -> str:
@@ -123,7 +123,7 @@ class DALLEImageGenerator(ImageGenerator):
     def _get_api_key(self) -> str:
         api_key = image_config.setting('OPENAI_API_KEY')
         if not api_key:
-            raise ValueError("请在项目 .env 或环境变量设置 OPENAI_API_KEY")
+            raise ValueError("请在 openwrite.yaml 的 image_sources 设置 openai_api_key，或环境变量 OPENAI_API_KEY")
         return api_key
     
     def generate(self, prompt: str, output_path: str, **kwargs) -> str:

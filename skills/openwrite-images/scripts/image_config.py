@@ -3,25 +3,26 @@
 
 Two layers, one direction of precedence:
 
-- Project-local `.env` (Git-ignored): service addresses and API keys.
-  Process environment variables win over `.env` values.
+- Project-local `openwrite.yaml` (Git-ignored): the image_sources section holds
+  service addresses and API keys (snake_case fields). Process environment
+  variables (upper-case names, e.g. FAL_KEY) win over file values.
 - Skill `config.json` (tracked): model profiles, workflow templates,
   source priority and cover-text layout rules. Never holds secrets.
 
-The `.env` parser mirrors `preferences.parse_env` semantics: plain
-KEY=value lines, optional quotes and trailing comments, nothing executed.
+The YAML file is read with yaml.safe_load; nothing in it is executed.
 """
 from __future__ import annotations
 
 import json
 import os
 from pathlib import Path
-import shlex
 from urllib.parse import urlparse
+
+import yaml
 
 CAPABILITY = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-ENV_NAME = '.env'
+CONFIG_NAME = 'openwrite.yaml'
 
 # Backends understood by produce.py; `file` imports an existing local image
 # (host tool output, user-provided art, or an official-doc illustration the
@@ -30,7 +31,7 @@ BACKENDS = ('comfyui', 'file', 'html', 'gemini', 'dalle',
             'fal', 'hunyuan', 'pexels', 'pixabay', 'unsplash')
 STOCK_BACKENDS = ('pexels', 'pixabay', 'unsplash')
 ONLINE_BACKENDS = ('fal', 'hunyuan')
-# Keys read from .env / process environment for each optional backend.
+# Keys read from openwrite.yaml image_sources / process environment per backend.
 BACKEND_KEYS = {
     'fal': ('FAL_KEY', 'FAL_AI_API_KEY'),
     'hunyuan': ('TENCENT_TOKENHUB_API_KEY',),
@@ -43,41 +44,22 @@ BACKEND_KEYS = {
 DEFAULT_COMFYUI_URL = 'http://localhost:8188'
 
 
-def parse_env(path: Path) -> dict:
-    """Read KEY=value lines as strings; quotes and trailing comments honoured."""
-    values = {}
-    for number, raw in enumerate(path.read_text(encoding='utf-8-sig').splitlines(), 1):
-        line = raw.strip()
-        if not line or line.startswith('#'):
-            continue
-        if line.startswith('export '):
-            line = line[7:].lstrip()
-        key, separator, value = line.partition('=')
-        key = key.strip()
-        if not separator:
-            raise ValueError(f'{path.name} 第 {number} 行需要 KEY=value 格式')
-        if key in values:
-            raise ValueError(f'{path.name} 中 {key} 重复配置')
-        lexer = shlex.shlex(value, posix=True)
-        lexer.whitespace_split = True
-        lexer.commenters = '#'
-        try:
-            tokens = list(lexer)
-        except ValueError as exc:
-            raise ValueError(f'{path.name} 第 {number} 行的 {key} 引号不完整：{exc}')
-        values[key] = ' '.join(tokens)
-    return values
-
-
-def env_values(root: Path = None) -> dict:
-    """Values from the project-local .env; absent file means empty config."""
-    path = (root or PROJECT_ROOT) / ENV_NAME
-    return parse_env(path) if path.is_file() else {}
+def config_values(root: Path = None) -> dict:
+    """image_sources section of the project-local openwrite.yaml; absent file means {}."""
+    path = (root or PROJECT_ROOT) / CONFIG_NAME
+    if not path.is_file():
+        return {}
+    try:
+        data = yaml.safe_load(path.read_text(encoding='utf-8-sig')) or {}
+    except yaml.YAMLError as exc:
+        raise ValueError(f'{CONFIG_NAME} 解析失败：{exc}') from exc
+    sources = data.get('image_sources') if isinstance(data, dict) else None
+    return sources if isinstance(sources, dict) else {}
 
 
 def setting(key: str, default: str = '', root: Path = None) -> str:
-    """Process environment wins over .env; empty values fall back."""
-    value = os.environ.get(key) or env_values(root).get(key, '')
+    """Process environment wins over the YAML field (key lower-cased); empty falls back."""
+    value = os.environ.get(key) or str(config_values(root).get(key.lower()) or '')
     value = value.strip()
     return value or default
 
@@ -109,13 +91,11 @@ def _is_local(url: str) -> bool:
 def comfyui_urls(root: Path = None) -> list:
     """Configured ComfyUI addresses, local ones first.
 
-    COMFYUI_SERVER_URL may hold one address or several comma-separated ones
-    (local or remote). Legacy COMFYUI_URL / config.json comfyui_url remain
-    readable so older setups keep working.
+    comfyui_server_url may hold one address or several comma-separated ones
+    (local or remote). The legacy config.json comfyui_url remains readable.
     """
     cfg = skill_config()
     raw = (setting('COMFYUI_SERVER_URL', root=root)
-           or setting('COMFYUI_URL', root=root)
            or str(cfg.get('comfyui_url') or '')
            or DEFAULT_COMFYUI_URL)
     urls = [part.strip().rstrip('/') for part in raw.split(',') if part.strip()]

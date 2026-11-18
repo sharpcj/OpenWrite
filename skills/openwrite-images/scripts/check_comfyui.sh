@@ -7,7 +7,7 @@
 #
 # Configuration:
 #   COMFYUI_SERVER_URL – address to probe; may be comma-separated, local first.
-#                        Falls back to the project .env value, then legacy
+#                        Falls back to openwrite.yaml image_sources, then legacy
 #                        COMFYUI_URL, then http://localhost:8188.
 #
 # Usage:
@@ -43,5 +43,5 @@ for URL in "${URLS[@]}"; do
 done
 
 echo "  - Start ComfyUI locally and retry, OR" >&2
-echo "  - Configure another image source in .env (fal / hunyuan / stock keys)." >&2
+echo "  - Configure another image source in openwrite.yaml image_sources (fal / hunyuan / stock keys)." >&2
 exit 1

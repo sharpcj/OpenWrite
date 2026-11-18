@@ -7,7 +7,7 @@ VENV_PYTHON := .venv/bin/python
 
 help:
 	@printf '%s\n' \
-	  'make setup   初始化运行环境、安装依赖并生成 .env（已有配置不覆盖）' \
+	  'make setup   初始化运行环境、安装依赖并生成 openwrite.yaml（已有配置不覆盖）' \
 	  'make doctor  检查本地依赖与技能，不验证外部服务连接'
 
 setup:
@@ -36,7 +36,7 @@ setup:
 	  "$(VENV_PYTHON)" -m pip install -r requirements.txt; \
 	fi; \
 	"$(VENV_PYTHON)" openwrite.py setup; \
-	printf '%s\n' '初始化完成。请编辑项目根目录 .env；外部服务凭证按需填写。' \
+	printf '%s\n' '初始化完成。请编辑项目根目录 openwrite.yaml；外部服务凭证按需填写。' \
 	  '无需手动激活环境。检查环境：make doctor' \
 	  '仅使用小红书时还需安装浏览器：.venv/bin/python -m playwright install chromium'
 

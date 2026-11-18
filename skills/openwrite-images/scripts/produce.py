@@ -6,7 +6,7 @@ stock libraries (Pexels / Pixabay / Unsplash), existing local files (host
 tool output, user art, official-doc illustrations downloaded by the agent)
 and HTML card rendering. `--backend auto` walks the configured priority
 order and falls back on failure; the request may pin its own order via
-`preferred_sources`. Addresses and keys live in the project .env.
+`preferred_sources`. Addresses and keys live in openwrite.yaml (image_sources).
 """
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def _validate_overlay(item: dict) -> None:
 
 
 def _cover_requirement(article: Path, request: dict) -> dict:
-    """Use task snapshots, never mutable .env defaults, to resolve cover design."""
+    """Use task snapshots, never mutable config defaults, to resolve cover design."""
     state_file = layout.existing(article, 'workflow.json')
     if request.get('role') != 'cover' or not state_file.is_file():
         return request
@@ -339,7 +339,7 @@ def produce(args: argparse.Namespace) -> dict:
         if not candidates:
             raise ValueError('没有可用的图片来源：'
                              + ('、'.join(skipped) + ' 均未配置或无输入文件；' if skipped else '')
-                             + '请在项目 .env 配置 COMFYUI_SERVER_URL / FAL_KEY / TENCENT_TOKENHUB_API_KEY / 图库密钥，'
+                             + '请在 openwrite.yaml 的 image_sources 配置 comfyui_server_url / fal_key / tencent_tokenhub_api_key / 图库密钥，'
                                '或用 --backend file --source 导入已有图片')
     else:
         candidates = [args.backend]

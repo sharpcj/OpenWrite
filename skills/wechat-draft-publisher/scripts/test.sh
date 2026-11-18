@@ -7,7 +7,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 echo "=== 微信公众号草稿发布工具 - 测试 ==="
 echo ""
 
-# 检查项目 .env 中的凭证是否已填写（不打印密钥内容）
+# 检查项目 openwrite.yaml 中的凭证是否已填写（不打印密钥内容）
 if ! python3 - "$PROJECT_ROOT" <<'PY' 2>/dev/null
 import sys
 from pathlib import Path
@@ -18,7 +18,7 @@ preferences.require_wechat_credentials(root)
 PY
 then
     echo "❌ 微信凭证未配置，请先运行: python3 $PROJECT_ROOT/openwrite.py setup"
-    echo "   然后编辑 $PROJECT_ROOT/.env 填写 WeChatAppID 和 WeChatAppSecret"
+    echo "   然后编辑 $PROJECT_ROOT/openwrite.yaml，在 wechat.accounts.<账号名> 下填写 app_id 和 app_secret"
     exit 1
 fi
 

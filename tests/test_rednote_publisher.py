@@ -58,7 +58,8 @@ class PublishNoteTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.project = Path(self.tmp.name).resolve()
         shutil.copy2(ROOT / 'preferences.py', self.project / 'preferences.py')
-        (self.project / '.env').write_text(f'XhsCreatorCookie="{COOKIE}"\n', encoding='utf-8')
+        (self.project / 'openwrite.yaml').write_text(
+            f'rednote:\n  accounts:\n    主账号:\n      cookie: "{COOKIE}"\n', encoding='utf-8')
         self.article = self.project / 'article'
         self.article.mkdir()
         from PIL import Image
@@ -72,7 +73,7 @@ class PublishNoteTests(unittest.TestCase):
                                '--artifact-dir', str(self.article), *extra])
 
     def test_dry_run_validates_without_cookie_or_browser(self):
-        (self.project / '.env').unlink()
+        (self.project / 'openwrite.yaml').unlink()
         with patch.object(publisher, 'RednotePublisher') as runtime:
             code = self.run_main('--dry-run')
         runtime.assert_not_called()
@@ -84,7 +85,7 @@ class PublishNoteTests(unittest.TestCase):
         self.assertNotEqual(self.run_main('--dry-run', '--topics', '#带井号'), 0)
 
     def test_publish_requires_cookie_before_launching_browser(self):
-        (self.project / '.env').unlink()
+        (self.project / 'openwrite.yaml').unlink()
         with patch('playwright.sync_api.sync_playwright') as browser:
             code = self.run_main()
         self.assertNotEqual(code, 0)
@@ -124,7 +125,8 @@ class PublishUiTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.project = Path(self.tmp.name).resolve()
         shutil.copy2(ROOT / 'preferences.py', self.project / 'preferences.py')
-        (self.project / '.env').write_text(f'XhsCreatorCookie="{COOKIE}"\n', encoding='utf-8')
+        (self.project / 'openwrite.yaml').write_text(
+            f'rednote:\n  accounts:\n    主账号:\n      cookie: "{COOKIE}"\n', encoding='utf-8')
         self.article = self.project / 'article'
         self.article.mkdir()
         from PIL import Image
@@ -172,8 +174,8 @@ class PublishCliTests(unittest.TestCase):
         for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py'):
             shutil.copy2(ROOT / name, self.project / name)
         shutil.copytree(ROOT / 'skills', self.project / 'skills')
-        (self.project / '.env').write_text(
-            'WeChat=true\nWriterRole=SelfMediaBlogger\n', encoding='utf-8')
+        (self.project / 'openwrite.yaml').write_text(
+            'wechat:\n  accounts:\n    主号: {}\n', encoding='utf-8')
         self.article = self.project / 'articles/note'
         self.article.mkdir(parents=True)
         finish(self.article)
@@ -194,7 +196,7 @@ class PublishCliTests(unittest.TestCase):
     def test_cli_publish_requires_cookie(self):
         result = self.run_cli()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('XhsCreatorCookie', result.stderr)
+        self.assertIn('cookie', result.stderr)
 
     def test_cli_wechat_only_flags_are_rejected_for_wechat(self):
         args = Namespace(article=str(self.article), title=None, author=None, digest=None,
