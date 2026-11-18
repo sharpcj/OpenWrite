@@ -1,12 +1,16 @@
 """Read-only real-time storyboard over article workspaces.
 
-Left pane: paginated task list (created date desc, date-range and platform
-filters), each task badged with its overall lifecycle state (ungenerated /
-generating / pending-publish / published); the seven writing steps all count
-as generating. Right pane: the selected task's creation board — title,
-subtitle (overall state / platform / topic / perspective), seven-step
-progress plus direction and publish nodes, and deliverable thumbnails once
-the task is complete.
+Left pane, top to bottom: global totals (created WeChat / Rednote task counts,
+unaffected by the selectors below), two per-account share pie charts (legacy
+tasks without an account fall into an "unassigned" slice), platform and account
+selectors (default WeChat / first account; account labels prefer the user-filled
+name), a created-date range, and the filtered task list (paginated, created date
+desc, no per-item platform badge). Each task is badged with its overall lifecycle
+state (ungenerated / generating / pending-publish / published); the seven writing
+steps all count as generating. Right pane: the selected task's creation board —
+title, subtitle (overall state / platform / account / topic / perspective),
+seven-step progress plus direction and publish nodes, and deliverable thumbnails
+once the task is complete.
 
 Aggregates existing files only; never writes workflow state and never reads
 credentials. Standard library only; the browser polls for live updates.
@@ -62,7 +66,7 @@ def brief_topic(article: Path) -> str:
 
 def summarize(article: Path) -> dict:
     summary = {'name': article.name, 'title': article.name, 'platform': '', 'platform_label': '',
-               'perspective': '', 'perspective_label': '', 'topic': '', 'created_at': '',
+               'account': '', 'perspective': '', 'perspective_label': '', 'topic': '', 'created_at': '',
                'done': 0, 'total': len(workflow.STEPS), 'completed': False,
                'stale': None, 'error': None,
                'overall': 'ungenerated', 'overall_label': '未生成'}
@@ -83,6 +87,7 @@ def summarize(article: Path) -> dict:
         'title': state.get('title') or article.name,
         'platform': platform,
         'platform_label': preferences.PLATFORM_LABELS.get(platform, platform),
+        'account': state.get('account') or '',
         'perspective': perspective,
         'perspective_label': preferences.PERSPECTIVE_LABELS.get(perspective, perspective),
         'topic': brief_topic(article) or state.get('title') or article.name,
@@ -104,7 +109,7 @@ def summarize(article: Path) -> dict:
     return summary
 
 
-def collect_tasks(root: Path, platform=None, date_from=None, date_to=None) -> list:
+def collect_tasks(root: Path, platform=None, account=None, date_from=None, date_to=None) -> list:
     articles = root / 'articles'
     tasks = []
     if articles.is_dir():
@@ -114,6 +119,8 @@ def collect_tasks(root: Path, platform=None, date_from=None, date_to=None) -> li
             summary = summarize(article)
             if platform and summary['platform'] != platform:
                 continue
+            if account and summary['account'] != account:
+                continue
             day = summary['created_at'][:10]
             if date_from and day and day < date_from:
                 continue
@@ -122,6 +129,59 @@ def collect_tasks(root: Path, platform=None, date_from=None, date_to=None) -> li
             tasks.append(summary)
     tasks.sort(key=lambda item: (item['created_at'], item['name']), reverse=True)
     return tasks
+
+
+UNASSIGNED = '__unassigned__'
+
+
+def account_labels(root: Path) -> dict:
+    """Per-platform account display labels: the user-filled name, else the key."""
+    config = preferences.read_config(root)
+    labels = {}
+    for platform in preferences.PLATFORMS.values():
+        accounts = (config.get(platform) or {}).get('accounts', {})
+        labels[platform] = {key: (fields.get('name') or key) for key, fields in accounts.items()}
+    return labels
+
+
+def _platform_account(article: Path):
+    """Lightweight read for stats: platform and account only, no artifact hashing."""
+    path = layout.existing(article, 'workflow.json')
+    if not path.is_file():
+        return None
+    try:
+        state = workflow.load(article)
+    except (OSError, ValueError):
+        return None
+    return preferences.task_platform(state), state.get('account') or ''
+
+
+def collect_stats(root: Path) -> dict:
+    """Global totals and per-account breakdown (unfiltered by date/account selectors)."""
+    labels = account_labels(root)
+    totals = {platform: 0 for platform in preferences.PLATFORMS.values()}
+    counts = {platform: {} for platform in preferences.PLATFORMS.values()}
+    articles = root / 'articles'
+    if articles.is_dir():
+        for article in articles.iterdir():
+            if not article.is_dir() or article.name.startswith('.'):
+                continue
+            info = _platform_account(article)
+            if info is None or info[0] not in totals:
+                continue
+            platform, account = info
+            totals[platform] += 1
+            bucket = account or UNASSIGNED
+            counts[platform][bucket] = counts[platform].get(bucket, 0) + 1
+    breakdown, options = {}, {}
+    for platform in preferences.PLATFORMS.values():
+        items = [{'account': key,
+                  'label': '未指定账号' if key == UNASSIGNED else labels[platform].get(key, key),
+                  'count': count} for key, count in counts[platform].items()]
+        items.sort(key=lambda item: (-item['count'], item['label']))
+        breakdown[platform] = items
+        options[platform] = [{'key': key, 'label': label} for key, label in labels[platform].items()]
+    return {'totals': totals, 'breakdown': breakdown, 'account_options': options}
 
 
 def paginate(tasks: list, page: int) -> dict:
@@ -238,6 +298,7 @@ class BoardHandler(BaseHTTPRequestHandler):
                 query = parse_qs(parsed.query)
                 tasks = collect_tasks(self.root,
                                       platform=query.get('platform', [None])[0] or None,
+                                      account=query.get('account', [None])[0] or None,
                                       date_from=query.get('from', [None])[0] or None,
                                       date_to=query.get('to', [None])[0] or None)
                 try:
@@ -245,6 +306,8 @@ class BoardHandler(BaseHTTPRequestHandler):
                 except ValueError:
                     page = 1
                 self._json(paginate(tasks, page))
+            elif parsed.path == '/api/stats':
+                self._json(collect_stats(self.root))
             elif parsed.path.startswith('/api/task/'):
                 self._json(task_detail(self.root, unquote(parsed.path[len('/api/task/'):])))
             elif parsed.path.startswith('/files/'):

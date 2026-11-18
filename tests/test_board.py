@@ -17,7 +17,7 @@ from test_rednote import finish
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def make_task(root, name, platform='wechat', created=None, complete=False):
+def make_task(root, name, platform='wechat', created=None, complete=False, account=None):
     article = root / 'articles' / name
     article.mkdir(parents=True)
     if complete:
@@ -25,7 +25,7 @@ def make_task(root, name, platform='wechat', created=None, complete=False):
         workflow.complete_format(article, 'indigo', False,
                                  workflow.check_publishable(article, workflow.load(article)))
     else:
-        workflow.initialize(article, f'{name} 标题', 'blogger', platform, {})
+        workflow.initialize(article, f'{name} 标题', 'blogger', platform, {}, account=account)
         workflow.write_json(layout.path(article, 'sources.json'), {'version': 1, 'sources': [
             {'id': 's1', 'title': '用户资料', 'kind': 'user', 'content': '实际资料内容'},
         ]})
@@ -35,6 +35,14 @@ def make_task(root, name, platform='wechat', created=None, complete=False):
         state['created_at'] = created
         workflow.write_json(layout.path(article, 'workflow.json'), state)
     return article
+
+
+def write_config(root, text):
+    (root / 'openwrite.yaml').write_text(text, encoding='utf-8')
+
+
+STATS_CONFIG = ('wechat:\n  accounts:\n    账号1:\n      name: 星河观察\n    账号2: {}\n'
+                'rednote:\n  accounts:\n    账号1:\n      name: 星河的小红书\n')
 
 
 class AggregationTests(unittest.TestCase):
@@ -66,6 +74,46 @@ class AggregationTests(unittest.TestCase):
                          ['mid-wechat', 'old-wechat'])
         ranged = board.collect_tasks(self.root, date_from='2026-11-05', date_to='2026-11-12')
         self.assertEqual([t['name'] for t in ranged], ['mid-wechat'])
+
+    def test_account_filter_and_summary_field(self):
+        write_config(self.root, STATS_CONFIG)
+        make_task(self.root, 'a1', 'wechat', account='账号1')
+        make_task(self.root, 'a2', 'wechat', account='账号2')
+        make_task(self.root, 'legacy', 'wechat')  # 无 account
+        self.assertEqual([t['name'] for t in board.collect_tasks(self.root, platform='wechat', account='账号1')],
+                         ['a1'])
+        self.assertEqual([t['name'] for t in board.collect_tasks(self.root, platform='wechat', account='账号2')],
+                         ['a2'])
+        # 全部账号（account=None）含旧文章
+        self.assertEqual(len(board.collect_tasks(self.root, platform='wechat')), 3)
+        self.assertEqual(board.summarize(self.root / 'articles/a1')['account'], '账号1')
+        self.assertEqual(board.summarize(self.root / 'articles/legacy')['account'], '')
+
+    def test_collect_stats_totals_breakdown_and_labels(self):
+        write_config(self.root, STATS_CONFIG)
+        make_task(self.root, 'w1', 'wechat', account='账号1')
+        make_task(self.root, 'w2', 'wechat', account='账号1')
+        make_task(self.root, 'w3', 'wechat', account='账号2')
+        make_task(self.root, 'wlegacy', 'wechat')
+        make_task(self.root, 'r1', 'rednote', account='账号1')
+        stats = board.collect_stats(self.root)
+        self.assertEqual(stats['totals'], {'wechat': 4, 'rednote': 1})
+        wechat = {item['account']: item for item in stats['breakdown']['wechat']}
+        self.assertEqual(wechat['账号1']['count'], 2)
+        self.assertEqual(wechat['账号1']['label'], '星河观察')  # name 优先
+        self.assertEqual(wechat['账号2']['label'], '账号2')      # 无 name 用键名
+        self.assertEqual(wechat[board.UNASSIGNED]['count'], 1)
+        self.assertEqual(wechat[board.UNASSIGNED]['label'], '未指定账号')
+        self.assertEqual(stats['breakdown']['rednote'][0]['label'], '星河的小红书')
+        self.assertEqual([o['key'] for o in stats['account_options']['wechat']], ['账号1', '账号2'])
+
+    def test_stats_are_global_not_affected_by_filters(self):
+        write_config(self.root, STATS_CONFIG)
+        make_task(self.root, 'w1', 'wechat', account='账号1', created='2026-11-01T10:00:00+08:00')
+        make_task(self.root, 'w2', 'wechat', account='账号2', created='2026-11-15T10:00:00+08:00')
+        # collect_stats 不接受过滤参数，始终统计全部
+        stats = board.collect_stats(self.root)
+        self.assertEqual(stats['totals']['wechat'], 2)
 
     def test_pagination_boundaries(self):
         for index in range(board.PAGE_SIZE + 3):
@@ -225,6 +273,45 @@ class BoardHttpTests(unittest.TestCase):
         self.get('/api/task/note')
         self.get('/files/note/xhs-01-cover.png')
         self.assertEqual(path.read_bytes(), before)
+
+
+class BoardStatsHttpTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory(prefix='openwrite-board-stats-')
+        cls.root = Path(cls.tmp.name).resolve()
+        (cls.root / 'articles').mkdir()
+        write_config(cls.root, STATS_CONFIG)
+        make_task(cls.root, 'w1', 'wechat', account='账号1')
+        make_task(cls.root, 'w2', 'wechat', account='账号2')
+        make_task(cls.root, 'r1', 'rednote', account='账号1')
+        cls.httpd = ThreadingHTTPServer(('127.0.0.1', 0), partial(board.BoardHandler, root=cls.root))
+        cls.thread = threading.Thread(target=cls.httpd.serve_forever, daemon=True)
+        cls.thread.start()
+        cls.base = f'http://127.0.0.1:{cls.httpd.server_address[1]}'
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown()
+        cls.httpd.server_close()
+        cls.tmp.cleanup()
+
+    def get_json(self, path):
+        with urlopen(self.base + path, timeout=10) as response:
+            return json.loads(response.read())
+
+    def test_stats_endpoint(self):
+        stats = self.get_json('/api/stats')
+        self.assertEqual(stats['totals'], {'wechat': 2, 'rednote': 1})
+        self.assertEqual([o['key'] for o in stats['account_options']['wechat']], ['账号1', '账号2'])
+        self.assertEqual(stats['breakdown']['wechat'][0]['label'], '星河观察')
+
+    def test_tasks_account_filter_via_query(self):
+        from urllib.parse import quote
+        data = self.get_json('/api/tasks?platform=wechat&account=' + quote('账号1'))
+        self.assertEqual([t['name'] for t in data['items']], ['w1'])
+        data = self.get_json('/api/tasks?platform=wechat')
+        self.assertEqual(data['total'], 2)  # 不传 account 即全部账号
 
 
 class AutoStartTests(unittest.TestCase):

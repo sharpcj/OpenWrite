@@ -13,8 +13,24 @@
   header h1 { font-size: 17px; margin: 0; }
   #refresh-info { font-size: 12px; color: #8a94a6; }
   main { display: flex; height: calc(100vh - 53px); }
-  aside { width: 360px; min-width: 300px; background: #fff; border-right: 1px solid #e3e6ea;
+  aside { width: 380px; min-width: 320px; background: #fff; border-right: 1px solid #e3e6ea;
           display: flex; flex-direction: column; }
+  .stats { padding: 12px 14px; border-bottom: 1px solid #eef0f3; }
+  .totals { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+  .totals div { font-size: 13px; color: #5b6b7f; display: flex; justify-content: space-between; }
+  .totals b { font-size: 15px; color: #2c3e50; }
+  .totals .wechat b { color: #07914a; }
+  .totals .rednote b { color: #d81e37; }
+  .pies { display: flex; gap: 12px; }
+  .pies figure { flex: 1; margin: 0; min-width: 0; }
+  .pies svg { width: 100%; max-width: 120px; height: auto; display: block; margin: 0 auto; }
+  .pies figcaption { font-size: 11px; color: #8a94a6; text-align: center; margin: 4px 0 6px; }
+  .legend { display: flex; flex-direction: column; gap: 3px; }
+  .legend-row { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #5b6b7f; }
+  .legend-row .swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .legend-row .legend-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend-row .legend-val { color: #98a2b3; flex: none; }
+  .legend-empty { font-size: 11px; color: #98a2b3; text-align: center; }
   .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 12px;
              border-bottom: 1px solid #eef0f3; }
   .filters select, .filters input { font-size: 12px; padding: 4px 6px; border: 1px solid #d5dae1;
@@ -27,8 +43,6 @@
   .task-title { font-size: 14px; font-weight: 600; margin-bottom: 5px; word-break: break-all; }
   .task-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
   .badge { font-size: 11px; padding: 1px 7px; border-radius: 9px; background: #eef1f5; color: #5b6b7f; }
-  .badge.wechat { background: #e6f7ec; color: #07914a; }
-  .badge.rednote { background: #ffe9ec; color: #d81e37; }
   .badge.overall-generating { background: #e8f1fb; color: #1a6db5; }
   .badge.overall-pending-publish { background: #fff7e6; color: #ad6800; }
   .badge.overall-published { background: #e6f7ec; color: #07914a; }
@@ -100,11 +114,31 @@
 </header>
 <main>
   <aside>
+    <div class="stats">
+      <div class="totals">
+        <div class="wechat"><span>已创建微信公众号任务</span><b id="total-wechat">0</b></div>
+        <div class="rednote"><span>已创建小红书图文任务</span><b id="total-rednote">0</b></div>
+      </div>
+      <div class="pies">
+        <figure>
+          <svg id="pie-wechat" viewBox="0 0 100 100" role="img" aria-label="微信账号占比"></svg>
+          <figcaption>微信 · 账号占比</figcaption>
+          <div class="legend" id="legend-wechat"></div>
+        </figure>
+        <figure>
+          <svg id="pie-rednote" viewBox="0 0 100 100" role="img" aria-label="小红书账号占比"></svg>
+          <figcaption>小红书 · 账号占比</figcaption>
+          <div class="legend" id="legend-rednote"></div>
+        </figure>
+      </div>
+    </div>
     <div class="filters">
-      <select id="platform-filter" title="按平台过滤">
-        <option value="">全部平台</option>
-        <option value="wechat">微信</option>
+      <select id="platform-filter" title="选择平台">
+        <option value="wechat">微信公众号</option>
         <option value="rednote">小红书</option>
+      </select>
+      <select id="account-filter" title="选择账号">
+        <option value="">全部账号</option>
       </select>
       <input type="date" id="date-from" title="创建日期起" value="1990-01-01">
       <input type="date" id="date-to" title="创建日期止">
@@ -135,11 +169,13 @@ const localToday = () => {
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
-const state = { page: 1, platform: '', from: '1990-01-01', to: localToday(), selected: null,
-                listJson: '', detailJson: '', busy: false };
+const state = { page: 1, platform: 'wechat', account: null, from: '1990-01-01', to: localToday(),
+                selected: null, listJson: '', detailJson: '', statsJson: '', busy: false };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
   (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const PALETTE = ['#1a6db5', '#07c160', '#fa8c16', '#d81e37', '#722ed1',
+                 '#13c2c2', '#eb2f96', '#a0d911', '#faad14', '#5b6b7f'];
 
 async function fetchJSON(url) {
   const response = await fetch(url, { cache: 'no-store' });
@@ -149,11 +185,81 @@ async function fetchJSON(url) {
 }
 
 function taskQuery() {
-  const params = new URLSearchParams({ page: state.page });
-  if (state.platform) params.set('platform', state.platform);
+  const params = new URLSearchParams({ page: state.page, platform: state.platform });
+  if (state.account) params.set('account', state.account);
   if (state.from) params.set('from', state.from);
   if (state.to) params.set('to', state.to);
   return '/api/tasks?' + params.toString();
+}
+
+function pieSVG(items) {
+  const total = items.reduce((sum, item) => sum + item.count, 0);
+  if (!total) return '<text x="50" y="55" text-anchor="middle" font-size="11" fill="#98a2b3">暂无</text>';
+  const cx = 50, cy = 50, r = 45;
+  let angle = -Math.PI / 2, paths = '';
+  items.forEach((item, index) => {
+    const frac = item.count / total;
+    const color = PALETTE[index % PALETTE.length];
+    if (frac >= 0.9999) {
+      paths += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}"/>`;
+    } else {
+      const a2 = angle + frac * 2 * Math.PI;
+      const x1 = cx + r * Math.cos(angle), y1 = cy + r * Math.sin(angle);
+      const x2 = cx + r * Math.cos(a2), y2 = cy + r * Math.sin(a2);
+      const large = frac > 0.5 ? 1 : 0;
+      paths += `<path d="M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} `
+             + `A${r},${r} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" fill="${color}"/>`;
+      angle = a2;
+    }
+  });
+  return paths;
+}
+
+function legendHTML(items) {
+  const total = items.reduce((sum, item) => sum + item.count, 0);
+  if (!total) return '<div class="legend-empty">暂无任务</div>';
+  return items.map((item, index) => {
+    const pct = Math.round(item.count / total * 100);
+    return `<div class="legend-row" title="${esc(item.label)}">
+      <span class="swatch" style="background:${PALETTE[index % PALETTE.length]}"></span>
+      <span class="legend-label">${esc(item.label)}</span>
+      <span class="legend-val">${item.count} · ${pct}%</span></div>`;
+  }).join('');
+}
+
+function syncAccountOptions(options) {
+  const select = $('account-filter');
+  const signature = JSON.stringify(options);
+  if (select.dataset.sig !== signature) {
+    select.dataset.sig = signature;
+    select.innerHTML = '<option value="">全部账号</option>'
+      + options.map((o) => `<option value="${esc(o.key)}">${esc(o.label)}</option>`).join('');
+  }
+  if (state.account === null) state.account = options.length ? options[0].key : '';
+  select.value = state.account;
+  if (select.value !== state.account) { select.value = ''; state.account = ''; }
+}
+
+function renderStats(data) {
+  $('total-wechat').textContent = data.totals.wechat;
+  $('total-rednote').textContent = data.totals.rednote;
+  for (const platform of ['wechat', 'rednote']) {
+    const items = data.breakdown[platform] || [];
+    $('pie-' + platform).innerHTML = pieSVG(items);
+    $('legend-' + platform).innerHTML = legendHTML(items);
+  }
+  syncAccountOptions(data.account_options[state.platform] || []);
+}
+
+async function refreshStats() {
+  const data = await fetchJSON('/api/stats');
+  const json = JSON.stringify(data);
+  if (json !== state.statsJson) {
+    state.statsJson = json;
+    renderStats(data);
+  } else {
+    syncAccountOptions(data.account_options[state.platform] || []);
+  }
 }
 
 function statusText(item) {
@@ -169,7 +275,6 @@ function renderList(data) {
       <div class="task-title">${esc(item.title)}</div>
       <div class="task-meta">
         <span class="badge overall-${esc(item.overall)}">${esc(item.overall_label)}</span>
-        ${item.platform_label ? `<span class="badge ${esc(item.platform)}">${esc(item.platform_label)}</span>` : ''}
         ${item.perspective_label ? `<span class="badge">${esc(item.perspective_label)}</span>` : ''}
         <span class="task-date">${esc((item.created_at || '').slice(0, 10))}</span>
       </div>
@@ -235,6 +340,7 @@ function renderDetail(detail) {
   $('board-subtitle').innerHTML = [
     detail.overall_label && `状态：${detail.overall_label}`,
     detail.platform_label && `平台：${detail.platform_label}`,
+    detail.account && `账号：${detail.account}`,
     detail.topic && `主题：${detail.topic}`,
     detail.perspective_label && `视角：${detail.perspective_label}`,
   ].filter(Boolean).map((text, index) =>
@@ -287,6 +393,7 @@ async function tick() {
   if (state.busy) return;
   state.busy = true;
   try {
+    await refreshStats();
     await refreshList();
     await refreshDetail();
     $('refresh-info').textContent =
@@ -305,7 +412,13 @@ $('task-list').addEventListener('click', (event) => {
 $('prev').addEventListener('click', () => { state.page -= 1; state.listJson = ''; tick(); });
 $('next').addEventListener('click', () => { state.page += 1; state.listJson = ''; tick(); });
 $('platform-filter').addEventListener('change', (event) => {
-  state.platform = event.target.value; state.page = 1; state.listJson = ''; tick();
+  state.platform = event.target.value;
+  state.account = null;            // 切换平台后重新默认该平台第一个账号
+  state.page = 1; state.listJson = ''; state.statsJson = '';
+  tick();
+});
+$('account-filter').addEventListener('change', (event) => {
+  state.account = event.target.value; state.page = 1; state.listJson = ''; tick();
 });
 $('date-from').addEventListener('change', (event) => {
   state.from = event.target.value; state.page = 1; state.listJson = ''; tick();
@@ -314,6 +427,7 @@ $('date-to').addEventListener('change', (event) => {
   state.to = event.target.value; state.page = 1; state.listJson = ''; tick();
 });
 
+$('platform-filter').value = state.platform;
 $('date-from').value = state.from;
 $('date-to').value = state.to;
 tick();
