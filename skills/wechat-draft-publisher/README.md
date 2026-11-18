@@ -46,7 +46,7 @@ WeChatAuthor=你的作者名
 
 ### 3. 使用项目内 Skill
 
-在 Agent 中打开 OpenWrite 项目，根目录的 `AGENTS.md` 会指引读取 `skills/wechat-draft-publisher/SKILL.md`。无需复制到全局技能目录。仅使用本模块时，也可以直接读取本目录的 `SKILL.md`。
+在 Agent 中打开 OpenWrite 项目，根目录的 `AGENT_GUIDE.md` 会指引读取 `skills/wechat-draft-publisher/SKILL.md`。无需复制到全局技能目录。仅使用本模块时，也可以直接读取本目录的 `SKILL.md`。
 
 ## 使用方法
 

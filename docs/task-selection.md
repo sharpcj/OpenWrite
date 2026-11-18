@@ -60,18 +60,8 @@ python3 openwrite.py new chosen-note --platform wechat --perspective tech
 
 ## 视角与能力
 
-微信平台根据任务视角读取相应 Skill：
-
-| 视角 | 写作 Skill |
-|---|---|
-| `blogger` | `wechat-blogger-writer` |
-| `tech` | `wechat-tech-writer` |
-| `product` | `wechat-product-manager-writer` |
-
-三种视角共用现有七步流程和独立图片能力。默认博主视角不因主题涉及技术或产品而自动切换。
+微信支持 `blogger` / `tech` / `product`，小红书目前只支持 `blogger`。遇到配置或明确参数产生的不支持组合时，说明限制并取得用户明确选择，不静默覆盖视角或平台。默认博主视角不因主题涉及技术或产品自动切换。写作 Skill 路由统一见 [Agent 指南](../AGENT_GUIDE.md#按阶段读取-skill)。
 
 写作流程检查点也由 `.env` 配置：`OutlineApproval=true`（默认）要求分析后、写正文前取得用户对三个备选标题与大纲的确认；设为 `false` 表示用户授权跳过。该值在 `new` / `workflow init` 时写入任务的 `outline_approval`，与平台、视角一样不随后续配置修改而改变；单次任务也可用 `--skip-outline` 显式授权跳过。
 
-小红书已完整接入：写作、卡片产物（3:4 组图 + 笔记文案）与发布均可推进；发布默认仅自己可见，公开需显式 `--public` 授权，可先 `--dry-run` 预演。小红书任务使用 `rednote-note-writer` 与 `rednote-publisher`，不套用微信长文规则。
-
-平台产物规格与适配器接线统一登记在根目录 `platforms.py`：微信与小红书均为 `implemented: true`、`publish_implemented: true`。写作门禁通过 `platforms.require_pipeline()` 判断，上传另经 `require_publish_adapter()`，不再硬编码单一平台。新增平台的接入清单与分阶段路线见 [平台适配器契约](platforms.md)。
+平台适配状态、规格与新增平台接入方式见 [平台适配器契约](platforms.md)；发布操作见 [发布协议](workflow.md#发布)。

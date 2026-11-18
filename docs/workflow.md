@@ -2,6 +2,8 @@
 
 项目入口用 `workflow/workflow.json` 保存进度并检查阶段产物。Agent 完成当前阶段的工作后提交结果，由代码检查并推进。它不自动调用大模型，也不自动判断论据或图片是否足够好。
 
+本文维护阶段命令与文件协议；Agent 决策规则从 [Agent 指南](../AGENT_GUIDE.md) 开始，安装、凭证和命令环境见 [环境与运行](setup.md)。下文 `python3` 指已安装项目依赖的解释器。
+
 整体分三个模块：**下发需求 → 写作 → 发布**。写作即下面的七步，最终交付可发布产物；发布必须由用户明确确认。
 
 固定顺序：**搜索资料 → 分析资料 → 写正文 → 生成封面 → 按需生成正文配图 → 生成 Markdown → 生成可发布交付件**。
@@ -26,10 +28,10 @@
 
 ## 初始化与查看
 
-新任务及 `workflow init` 按 [平台与视角规则](task-selection.md) 只读取本地 `.env`（`.env.example` 仅是 `setup` 用的模板）；提示词明确指定值由 Agent 转为参数。默认微信与自媒体博主。已保存任务继续沿用原选择。小红书已完整接入（写作、卡片产物与发布）；任务按图文形态推进，不会套用微信长文规则。
+新任务及 `workflow init` 按 [平台与视角规则](task-selection.md) 只读取本地 `.env`（`.env.example` 仅是 `setup` 用的模板）；提示词明确指定值由 Agent 转为参数。模板默认启用微信与自媒体博主；没有 `.env` 时平台没有默认项。已保存任务继续沿用原选择。小红书已完整接入（写作、卡片产物与发布）；任务按图文形态推进，不会套用微信长文规则。
 
 ```bash
-python3 openwrite.py new rag-guide --title "RAG 入门" --type tech
+python3 openwrite.py new rag-guide --title "RAG 入门" --perspective tech
 python3 openwrite.py workflow status articles/rag-guide
 ```
 
@@ -134,7 +136,7 @@ python3 openwrite.py image articles/rag-guide --id cover --backend file --source
 python3 openwrite.py workflow complete articles/rag-guide --step cover --reviewed --note "已检查标题、构图和正文主题一致"
 ```
 
-正文配图必须明确做出决策。无须配图时，保存 `workflow/content-images.json`：
+正文配图必须明确做出决策。**微信**无须配图时，保存 `workflow/content-images.json`：
 
 ```json
 {"needed": false, "reason": "正文以观点论述为主，文字已经足够清楚"}
@@ -146,7 +148,9 @@ python3 openwrite.py workflow complete articles/rag-guide --step cover --reviewe
 python3 openwrite.py workflow complete articles/rag-guide --step content
 ```
 
-需要配图时，改为 `needed: true` 并说明理由，将正文图片需求追加到清单，逐项获取后提交 `--reviewed --note "验收说明"`。`placement` 必须完整且唯一地匹配 `process/draft.md` 中的某一行标题或段落（也可用完整的多行段落）；程序在它后面插图。不要使用“第二部分附近”这样的模糊描述。
+需要配图时，使用 `needed: true` 并说明理由，将正文图片需求追加到清单，逐项获取后提交 `--reviewed --note "验收说明"`。微信 `placement` 必须完整且唯一地匹配 `process/draft.md` 中的某一行标题或段落（也可用完整的多行段落）；程序在它后面插图。不要使用“第二部分附近”这样的模糊描述。
+
+**小红书**内容卡片必需，不能使用 `needed: false`。卡片需求使用从 2 开始且不重复的 `order`，不使用正文插图锚点；封面和内容卡片在第 4/5 步通过 `html` 后端渲染。示例见 [小红书写作 Skill](../skills/rednote-note-writer/SKILL.md)。
 
 `--reviewed` 是执行者实际完成视觉检查后的确认，可以由有看图能力的 Agent 提交，也可由用户确认后记录。它不意味着必须每一步询问用户，也不是机器自动判断画面正确。无看图能力时不得伪造验收，应挂起该步交用户确认。
 
@@ -160,11 +164,11 @@ python3 openwrite.py format articles/rag-guide --theme default
 # 保留正文和代码的原始引号、间距可加 --no-preformat
 ```
 
-`finalize` 是第六步：根据 `process/draft.md` 和正文图片插入位置生成 `article.md`；封面不写入正文。最终文件由程序整合，不让 Agent 另写一份与草稿脱节的正文。
+`finalize` 是第六步：微信根据 `process/draft.md` 和正文图片插入位置生成 `article.md`，封面不写入正文；小红书生成 `note.md`，不嵌卡片。最终文件由程序整合，不让 Agent 另写一份与草稿脱节的正文。
 
-`format` 是第七步。微信：转换 HTML、执行微信代码块兼容转换，然后做**可发布性检查**——标题不超过 64 字符 / 192 字节、作者不超过 20 字节、摘要不超过 120 字节、封面存在且为 PNG 且小于 2MB、HTML 非空、代码块已转换、正文引用的本地图片都存在。
+`format` 是第七步。微信转换 HTML、执行代码块兼容转换，然后校验标题/作者/摘要长度、封面格式与大小、HTML 非空、代码块已转换、正文引用的本地图片齐备。主题和预格式化选项见 [微信排版选项](setup.md#微信排版选项)。
 
-小红书：卡片已在第 4/5 步由 `html` 后端渲染，第七步**只组装与校验**——确定卡片顺序（封面第 1，内容按 `order`）、标题不超过 20 字、逐张校验 PNG 与 1080×1440 尺寸、核对 `note.md` 标题与文案、解析话题。
+小红书卡片已在第 4/5 步渲染，第七步**只组装与校验**：确定顺序（封面第 1，内容按 `order`），校验标题/文案长度、图片张数、逐张格式与尺寸，核对 `note.md` 并解析话题。两平台的具体规格与上限见 [平台规格](platforms.md#当前平台状态)，代码以 `platforms.py` 为准。
 
 任一检查不通过即报错，保留上一次成功的产物，不推进状态。
 
@@ -195,9 +199,9 @@ python3 openwrite.py format articles/rag-guide --theme default
 python3 openwrite.py publish articles/rag-guide
 ```
 
-`publish` 要求七步完成，且 `workflow/publish-manifest.json` 记录的指纹与当前产物完全一致；标题默认取清单中已确认的值，`--title` / `--author` / `--digest` 可显式覆盖。产物在确认后被修改时旧确认失效，必须重新排版并重新取得用户确认。微信凭证来自项目 `.env`，未配置时在调用微信 API 之前报错。
+`publish` 要求七步完成，且 `workflow/publish-manifest.json` 记录的指纹与当前产物完全一致；标题默认取清单中已确认的值，`--title` / `--author` / `--digest` 可显式覆盖。产物在确认后被修改时旧确认失效，必须重新排版并重新取得用户确认。凭证配置与缓存位置见 [环境与运行](setup.md#配置与凭证)。微信未配置凭证时在调用 API 之前报错。
 
-**小红书发布**：七步完成后 `publish` 按清单顺序上传组图与笔记文案，默认「仅自己可见」；公开需用户显式 `--public`，可先 `--dry-run` 预演（仅本地校验，不登录不发布）。凭证为 `.env` 的 `XhsCreatorCookie`，未配置或失效时在发布前报错。只有观察到站点成功信号才报告已发布；失败保留截图，可修正后重试。
+**小红书发布**：七步完成后 `publish` 按清单顺序上传组图与笔记文案，默认「仅自己可见」；公开需用户显式 `--public`，可先 `--dry-run` 预演（仅本地校验，不登录不发布）。未配置 Cookie 时在启动浏览器前报错，失效时中止并报告失败。只有观察到站点成功信号才报告已发布；失败保留截图，可修正后重试。
 
 **发布记录**：发布成功（发布脚本退出码 0）后入口写入 `workflow/publish-record.json`（平台、标题、可见性、时间戳）；微信可见性记为 `draft`（草稿箱），小红书为 `private` / `public`；`--dry-run` 不写记录。看板右栏的「已发布」节点只以该记录为依据，产物过期不抹掉历史发布事实。
 

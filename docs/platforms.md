@@ -17,7 +17,7 @@ OpenWrite 的流程秩序是平台中立的，产物形态按平台分派。本�
 | `label` | 平台中文名，与 `preferences.PLATFORM_LABELS` 一致 |
 | `implemented` | 写作→可发布产物的适配器是否已实现；`false` 时可选择并记录，但所有门禁拒绝推进 |
 | `publish_implemented` | 上传适配器是否已实现；与 `implemented` 独立，可发布产物就绪不等于存在上传路径 |
-| `format_label` | 第七步的平台化名称（微信「排版…」，小红书「组装…」） |
+| `format_label` | 第七步的平台化名称（当前均为「生成可发布交付件」） |
 | `writers` | 视角 → 写作 Skill 名 |
 | `renderer` / `publisher` / `publisher_entry` | 渲染与发布 Skill 及入口脚本 |
 | `markdown_artifact` | 第六步整合产物名 |
@@ -37,7 +37,7 @@ OpenWrite 的流程秩序是平台中立的，产物形态按平台分派。本�
 | 平台 | 可选择 | 写作→可发布产物 | 上传 | 产物形态 |
 |---|---|---|---|---|
 | 微信 `wechat` | ✅ | ✅ | ✅ | 长文：`article.md` → `article.html` + `cover.png`（1024×432，不嵌正文） |
-| 小红书 `rednote` | ✅ | ✅ | ✅ | 图文：`note.md` + `cards.md` → 3:4 组图（1080×1440，封面即首图） |
+| 小红书 `rednote` | ✅ | ✅ | ✅ | 图文：`process/cards.md` → 3:4 组图，配 `note.md` 文案（1080×1440，封面即首图） |
 
 小红书写作、卡片产物与发布适配器均已实现：卡片由 `openwrite-images` 的 `html` 后端渲染，第七步只组装与校验；发布由 `rednote-publisher` 通过创作服务平台发布页自动化完成（Playwright，站点自身签名），**默认仅自己可见，公开需显式 `--public` 授权**，支持 `--dry-run` 预演。
 
@@ -98,7 +98,7 @@ def render_<platform>(directory: Path, state: dict, args: argparse.Namespace, st
 4. 实现发布 Skill，登记 `publisher` 与 `publisher_entry`，并置 `publish_implemented: true`。
 5. 在 `preferences` 增加平台键与凭证键；`setup` 模板补占位项。
 6. 补测试：规格、门禁拒绝、产物指纹、可发布性检查、端到端。
-7. 写作链路通过后置 `implemented: true`；上传链路通过后再置 `publish_implemented: true`，并更新 `AGENTS.md`、README 与本文件。
+7. 写作链路通过后置 `implemented: true`；上传链路通过后再置 `publish_implemented: true`，并更新 `AGENT_GUIDE.md`、README 与本文件。
 
 不需要复制 `workflow.py`、图片能力或配图协议。
 
@@ -113,11 +113,13 @@ skills/
 
 articles/<名称>/
 ├── note.md                   # 笔记文案：标题 + 正文 + 话题
-├── cards.md                  # 分页卡片稿
+├── process/
+│   └── cards.md              # 分页卡片稿
 ├── xhs-01-cover.png          # 封面即首图
 ├── xhs-02-<topic>.png        # 内容页
-├── image-requests.json       # 复用现有协议，尺寸 1080×1440
-└── publish-manifest.json     # 元数据（title/desc/topics/images）+ 指纹
+└── workflow/
+    ├── image-requests.json   # 复用现有协议，尺寸 1080×1440
+    └── publish-manifest.json # 元数据（title/desc/topics/images）+ 指纹
 ```
 
 图片输出仍须是文章同目录下的扁平 PNG 文件名（现有配图协议约束），不使用子目录。

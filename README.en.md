@@ -2,145 +2,90 @@
 
 [中文](README.md) · [English](README.en.md)
 
-OpenWrite is a project-local WeChat article workspace for AI agents. **Open this repository in your agent and use the skills included in the project. No global skill installation is required.**
+OpenWrite is a project-local content workspace for AI agents, supporting WeChat articles and Rednote image notes. It covers research, writing, images, publishable artifacts, and publishing on request, with sources and results saved inside the project.
+
+**Open the repository in your agent to use its built-in skills. No global skill installation is required.** The agent researches, creates and reviews; code validates artifacts and stage order.
+
+| Platform | Deliverables | Publishing |
+|---|---|---|
+| WeChat | Markdown, formatted HTML, a separate cover and optional body images | Upload to the draft box; send to subscribers through the WeChat backend |
+| Rednote | Caption text and 3:4 cards, with a cover as the first card and required content cards | Publish privately by default; public visibility needs explicit authorization |
+
+## Quick start
+
+On macOS / Linux, install Python 3 and Make, then run from the repository root:
+
+```bash
+make setup
+make doctor
+```
+
+`make setup` creates or reuses `.venv`, installs dependencies, and copies `.env.example` to local `.env` without overwriting existing configuration. Dependency installation needs network access. It does not fill credentials, generate images or publish anything.
+
+Edit `.env` for the platform, writer role and optional service credentials. The template enables WeChat and the blogger role. WeChat also supports technical and product-manager perspectives; Rednote currently supports the blogger role. Configure image and publishing services before using them.
+
+Rednote card rendering and publishing additionally need a one-time browser download:
+
+```bash
+.venv/bin/python -m playwright install chromium
+```
+
+See [environment and runtime setup](docs/setup.md) for manual installation, Windows PowerShell, board limitations and troubleshooting. `doctor` performs local checks only; it does not validate external services or credentials. Detailed project guides are maintained in Chinese.
 
 ## Start writing
 
-Open the repository as the working directory. Read [AGENTS.md](AGENTS.md), then describe your task. If your host does not automatically load project instructions, explicitly ask it to read that file first. `CLAUDE.md` and `GEMINI.md` point to the same entrypoint rather than maintaining separate workflows.
+Open the repository as the working directory and describe your request:
 
-Examples:
+> Write a WeChat article about RAG for nontechnical readers, including images and formatted HTML.
 
-> Write a WeChat article about RAG for nontechnical readers. Save it under articles/rag-guide, including illustrations and formatted HTML.
+> Create a Rednote image note about three ways to organize reading notes, including cards and caption text.
 
-> Continue articles/rag-guide and simplify the introduction.
+> Continue articles/rag-guide, simplify its introduction and format it again.
 
-> Upload articles/rag-guide to the WeChat draft box with the title “How knowledge bases help AI answer accurately”.
+> Upload articles/rag-guide to the WeChat draft box.
 
-Project instruction loading depends on the host. Search, file access, shell execution, and image generation depend on the tools it provides. Missing capabilities are reported explicitly. See [AGENT_GUIDE.md](AGENT_GUIDE.md#english).
+All formal project rules start in [AGENT_GUIDE.md](AGENT_GUIDE.md). `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` only direct the host to that guide. If the host does not load instructions automatically, ask the agent to read `AGENT_GUIDE.md` first.
 
-## Layout
+Writing follows seven stages: research, analysis, draft, cover, content images, Markdown and publishable artifacts. By default, the title and outline require approval before the full draft is written. Writing and formatting do not authorize publishing. Available search, file, shell and image tools depend on the host; missing capabilities are reported without claiming unfinished work is complete.
+
+## Workspaces and progress
+
+Each task lives in its own `articles/<name>/`, ignored by Git by default:
 
 ```text
-OpenWrite/
-├── AGENTS.md
-├── CLAUDE.md
-├── GEMINI.md
-├── AGENT_GUIDE.md
-├── openwrite.py
-├── workflow.py
-├── preferences.py
-├── platforms.py          # platform adapter registry
-├── .env.example        # tracked placeholder template
-├── .env                # local real config, created by setup, Git-ignored
-├── requirements.txt
-├── skills/
-│   ├── wechat-blogger-writer/
-│   ├── wechat-tech-writer/
-│   ├── wechat-product-manager-writer/
-│   ├── rednote-note-writer/
-│   ├── wechat-article-formatter/
-│   ├── wechat-draft-publisher/
-│   ├── rednote-publisher/
-│   └── openwrite-images/
-├── articles/
-└── tests/
+articles/<name>/
+├── article.md / article.html / cover.png  # WeChat artifacts + optional body images
+├── note.md / xhs-*.png                   # Rednote artifacts (platform-specific)
+├── process/                             # Brief, sources, analysis, outline and drafts
+└── workflow/                            # State, image records and publish manifest
 ```
 
-The original four skill names remain unchanged. The new `openwrite-images` capability handles image acquisition independently of writing. The project reads them on demand from `skills/`; do not copy them into a user-level skill directory.
-
-## Setup and commands
-
-Python 3.8+ is required for the core scripts.
-
-On macOS/Linux with Python 3 and Make installed, run `make setup` from the project root. It creates or reuses `.venv`, installs dependencies (using `uv` when available, otherwise venv/pip), and invokes the existing configuration setup command to create `.env` without overwriting an existing file. Dependency installation needs network access; no credentials are filled in and no images or drafts are uploaded. Edit `.env` for platform, perspective and optional service credentials, then run `make doctor`. Activation is unnecessary; use `.venv/bin/python openwrite.py ...` for other commands. Rednote additionally needs `.venv/bin/python -m playwright install chromium`.
-
-If Make or Python is missing, install those prerequisites first. For native Windows PowerShell or manual setup:
+The read-only board shows progress and artifact previews. New tasks automatically start it and open a browser. See [board controls](docs/setup.md#实时故事板) for disabling startup, manual use and ports. Resume a task with:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-python3 -m pip install -r requirements.txt
-# Create shared platform/perspective/service configuration; fill credentials when needed
-python3 openwrite.py setup
-python3 openwrite.py doctor
-
-python3 openwrite.py new rag-guide --title "RAG explained" --type tech
-# Use --type product for the product manager perspective.
-python3 openwrite.py workflow status articles/rag-guide
-# Submit the first five stages through workflow complete --step <stage>.
-# Before draft: present three candidate titles plus an outline and get user approval
-# (outline.md / outline.json); skip only when authorized via OutlineApproval=false or --skip-outline.
-# After the first five stages have passed their checks:
-python3 openwrite.py workflow finalize articles/rag-guide   # stage 6: article.md
-python3 openwrite.py format articles/rag-guide --theme default  # stage 7: publishable artifact
-# Preserve original quotes and spacing, including code examples:
-python3 openwrite.py format articles/rag-guide --no-preformat
-
-# Only after the user confirms publication; calls the WeChat API and creates a draft.
-# The title defaults to the approved value in publish-manifest.json:
-python3 openwrite.py publish articles/rag-guide
+.venv/bin/python openwrite.py workflow status articles/rag-guide
 ```
 
-`doctor` performs local checks only. `new` creates a brief, source list, analysis and draft stubs, and `workflow.json`; it does not create final Markdown. The agent writes the article using the selected skill and submits completed artifacts through the workflow. Existing article directories are not overwritten. `format` is the seventh stage: it runs the formatter and code-block converter, checks publishability, writes `publish-manifest.json`, and preserves existing HTML on failure. WeChat body themes: `default`, `grace`, `modern` (warm orange), `simple`, `blueprint-tech` (blue headings, teal quotes and striped tables). Select one through the existing `format --theme blueprint-tech` option; add `--no-preformat` when changing only the theme. These themes do not change covers or Rednote cards.
+## Documentation
 
-## Article workspace
+| Document | Purpose |
+|---|---|
+| [Agent guide](AGENT_GUIDE.md) | Formal execution rules, skill routing, approvals and delivery |
+| [Environment and runtime](docs/setup.md) | Installation, credentials, Python environment, formatting, board and troubleshooting |
+| [Task selection](docs/task-selection.md) | Platform/role precedence, arguments and saved choices |
+| [Seven-stage workflow](docs/workflow.md) | Artifact schemas, JSON examples, publish checks and rework commands |
+| [Image contract](docs/image-contract.md) | Requests, results, sources and review records |
+| [WeChat cover design](docs/cover-style.md) | Layout, visual style, color tone and per-task overrides |
+| [Platform adapter contract](docs/platforms.md) | Platform specs, code responsibilities and adapter onboarding |
 
-Each article lives in `articles/<name>/`: `brief.md` records requirements; `workflow.json` stores progress; `sources.json` stores source content; `analysis.md` cites source IDs; `outline.md` and `outline.json` record the approved title and outline; `draft.md` contains the body; `article.md` is assembled in stage six; `cover.png` is uploaded separately; `structure.png` is an optional content illustration; other images are optional; `article.html` and `publish-manifest.json` are the stage-seven publishable artifact.
-
-All three writing perspectives follow this fixed sequence: **Search sources → Analyze sources → Write the body → Generate the cover → Generate content illustrations as needed → Generate Markdown → Format and save the publishable artifact**. Structure diagrams are optional content illustrations. Completing stage seven means the artifact is publishable; uploading still requires explicit user confirmation. Continue an existing article by reading its brief and artifacts. Article workspaces are ignored by Git by default.
-
-## External services
-
-Writing skills define visual requirements only: content, dimensions, palette, composition, text, placement, and acceptance criteria. The independent [openwrite-images](skills/openwrite-images/SKILL.md) capability obtains and validates files. They exchange `image-requests.json` and `image-results.json` in each article directory; see the [contract](docs/image-contract.md).
+## Development checks
 
 ```bash
-python3 openwrite.py image articles/rag-guide --id cover --backend comfyui
-python3 openwrite.py image articles/rag-guide --id cover --backend file --source /path/to/cover.png
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
-Backend code, configuration, and workflows live only in `skills/openwrite-images/`. ComfyUI and optional Gemini / DALL-E implementations are retained. Agent-generated, user-supplied, or software-rendered images can be imported through `file`. Text-precise cards (Rednote) are typeset in HTML and screenshotted by the `html` backend using Playwright, with real DOM checks for overflow, minimum font size and safe area. Pillow validates files and dimensions. Resizing, cropping, and overwriting require explicit options. File readiness does not replace visual review by the writing workflow.
+The command entrypoint is `openwrite.py`; skills live in `skills/`, platform specs in `platforms.py`, and workspace paths in `layout.py`. Engineering requests modify the project directly without starting article production.
 
-Rednote card rendering needs Playwright plus a one-time browser download (`python3 -m playwright install chromium`); it runs locally and offline afterwards. `doctor` reports its readiness. WeChat-only tasks do not need it.
+## License
 
-WeChat credentials share the project configuration: `.env.example` is a tracked placeholder template, and real values live in the local `.env`. Run `python3 openwrite.py setup` to copy the template (existing files are never overwritten; the copy gets mode 600 and is Git-ignored), then fill in `WeChatAppID`, `WeChatAppSecret`, and optionally `WeChatAuthor`. Never put real secrets into `.env.example`. Without credentials, `publish` fails with these instructions instead of reading `~/.wechat-publisher/config.json`; the access-token cache remains at `~/.wechat-publisher/token_cache.json`. Rednote publishing uses `XhsCreatorCookie` in the same `.env` (the full cookie copied from a logged-in creator.xiaohongshu.com session); it defaults to private visibility, requires an explicit `--public` for public notes, and supports `--dry-run`. Project-local skills do not remove external-service setup requirements. Publishing creates a WeChat draft rather than sending the article to subscribers; a Rednote note is published with the visibility the user explicitly chose.
-
-## Validation and attribution
-
-```bash
-python3 -m unittest discover -s tests -v
-```
-
-Legacy live preview and batch scripts still need adaptation to the current formatter. The project command uses the maintained core conversion scripts.
-
-Forked from [BND-1/wechat_article_skills](https://github.com/BND-1/wechat_article_skills), previously adapted for Hermes Agent, and now organized as OpenWrite with a project-local agent workflow. [MIT License](LICENSE).
-
-## Step-by-step workflow
-
-The overall flow has three modules: **request → writing → publishing**. The request and the upload need explicit user confirmation; writing is a seven-stage pipeline whose deliverable is a publishable artifact.
-
-The seven stages are `search`, `analysis`, `draft`, `cover`, `content`, `markdown`, and `format`. Use `workflow complete <article> --step <stage>` for the first five; `finalize` completes the sixth and `format` completes the seventh. Each transition validates required artifacts and checks the fingerprints of prior stages. Image stages require actual visual review, confirmed with `--reviewed --note "review details"`. If content images are unnecessary, explicitly record `needed: false` and a reason in `content-images.json`.
-
-Between analysis and draft there is a **title and outline checkpoint**: present three candidate titles (at least one bold/suspenseful `激进悬念`, one objective/neutral `客观中性`, the third defaults to benefit-oriented `利益实用`) plus an outline, let the user pick or define a title and approve the outline, and iterate on feedback until approved. Only then write the full body. The approval is recorded in `outline.md` and `outline.json`; the draft H1 must match the approved title. The checkpoint is controlled by `OutlineApproval` in `.env` (default on) and can be skipped with `new --skip-outline` when the user authorizes it.
-
-`workflow finalize <article>` assembles `draft.md` and approved images into `article.md`. Content image `placement` must uniquely match a complete heading line or paragraph in the draft. Covers are excluded from the body.
-
-`format <article>` is the seventh stage: it converts HTML, runs the WeChat code-block conversion, then checks publishability (title ≤64 chars / 192 bytes, author ≤20 bytes, digest ≤120 bytes, PNG cover under 2MB, non-empty HTML, converted code blocks, existing local images). On success it writes `publish-manifest.json` with metadata and fingerprints of every artifact and completes the stage; on failure it preserves the previous HTML. Re-running `format` with another theme replaces the seventh record. `publish` requires the manifest fingerprints to match the current artifacts, takes the title from the manifest unless overridden, and refuses stale or modified output.
-
-Use `workflow status <article>` to resume in another session. Use `workflow reset <article> --from draft` to redo the body and later stages without deleting files. Existing articles can start with `workflow init <article>`, then submit their artifacts in order. See the [stage protocol](docs/workflow.md) for JSON examples and exact checks. These are project command gates, not permission isolation or automatic editorial review.
-
-## Platform and perspective defaults
-
-Runtime configuration is read only from the local `.env`; `.env.example` is a sample template used solely by `setup` and never participates in resolution. Without `.env` the platform has no default and the command asks for an explicit choice; the writer role still defaults to the self-media blogger. The template samples WeChat and `WriterRole=SelfMediaBlogger`. Platform keys are the booleans `WeChat` and `Rednote`; the perspective is the single-valued `WriterRole` (`SelfMediaBlogger`, `TechWriter`, or `ProductManager`). Legacy boolean perspective keys are rejected with a migration hint.
-
-Explicit user choices, passed by the agent as `--platform wechat|rednote` and `--perspective blogger|tech|product`, win over configuration. For the platform, if no single option is enabled and the user has not specified one, the command refuses to create a task and asks for an explicit choice. The writer role falls back to `SelfMediaBlogger` when `WriterRole` is absent or empty, so it never needs confirmation. The two dimensions resolve independently.
-
-Run `python3 openwrite.py preferences` to inspect the resolved defaults. Task choices are persisted in `workflow.json`; changing the defaults does not change existing work. Rednote is fully implemented (writing, card artifacts, and publishing); publishing defaults to private visibility and requires an explicit `--public` for public notes. See [selection rules](docs/task-selection.md).
-
-Platform differences live in the `platforms.py` registry (artifact shape, dimensions, image counts, limits, renderer and publisher skills); the controller and command entry only read that table. `implemented` covers writing through the publishable artifact, `publish_implemented` covers uploading; the two are independent. See the [platform adapter contract](docs/platforms.md) for the onboarding checklist and phased roadmap.
-
-## WeChat cover design
-
-Configure layout, visual style and color tone independently in the local `.env` through `WeChatCoverLayout`, `WeChatCoverVisualStyle` and `WeChatCoverColorTone`. They accept custom descriptions. Per-task `--cover-layout`, `--cover-visual-style` and `--cover-color-tone` override only their respective dimensions; `new` and `workflow init` persist a snapshot.
-
-The left-text/right-image layout keeps a continuous background, reserves the right side for the subject and constrains typeset text to the left. Current tasks can use `workflow cover-style` before completing the cover stage; completed covers require resetting first. Existing tasks without snapshots keep their original behavior. See [cover design](docs/cover-style.md).
+[MIT License](LICENSE).

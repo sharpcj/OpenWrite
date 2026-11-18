@@ -1,101 +1,93 @@
-# OpenWrite Agent 接入指南
+# OpenWrite Agent 指南
 
-OpenWrite 是项目级创作工程，统一入口为 [AGENTS.md](AGENTS.md)。各 Skill 保存在 `skills/` 下，文章保存在 `articles/` 下，无需全局安装。
+本文件是正式项目规则与技能路由的统一入口。`AGENTS.md`、`CLAUDE.md`、`GEMINI.md` 仅要求先读取本文件；宿主未自动加载时，先让 Agent 读取本文件。具体阶段协议、配置与操作示例按下方链接读取，不预加载整个技能库。
 
-## 在不同 Agent 中打开
+## 先识别任务
 
-将 OpenWrite 作为项目或工作目录打开。宿主支持自动读取项目说明时，通过对应入口读取 `AGENTS.md`；`CLAUDE.md`、`GEMINI.md` 只转向同一份说明。若宿主没有自动读取机制，直接说：“先阅读项目根目录 AGENTS.md，然后按其中的技能路由执行我的创作需求。”
+OpenWrite 支持微信公众号与小红书图文创作，Skill 位于项目 `skills/`，工作区位于 `articles/`，无需全局安装。
 
-这是一套项目文件约定，不是通用 Agent SDK，也不要求所有宿主使用相同的 Skill 加载接口。不要为使用 OpenWrite 而把 Skill 复制到全局目录。宿主必须能够读取项目文件，或由用户提供所需文档。
+- 工程开发、文档评估或维护：直接处理工程，不启动文章创作流程。
+- 新建创作：确定平台、主题、视角、资料、约束与图片来源授权，使用 `openwrite.py new` 落盘。需求已明确的维度沿用用户选择。
+- 继续创作或处理指定产物：优先使用用户指定目录，先运行 `workflow status <目录>`，再读 `process/brief.md` 与已有产物。不凭修改时间挑选待发布文章，不覆盖其他任务。
+- 用户只要求某个阶段：仅处理已到达的阶段，不能跳过未完成的前置步骤。缺少能力时记录待办，交付实际完成的部分。
 
-## 平台和视角选择
+## 平台、视角与快照
 
-新任务的平台采用配置中唯一启用项，写作视角采用单值 `WriterRole`（缺省默认自媒体博主）：运行时只读取本地 `.env`，[.env.example](.env.example) 只是供 `setup` 复制的打样模板，不参与解析。用户提示词明确指定时以其选择优先。Agent 仅把明确选择传为 `--platform` / `--perspective`；平台配置歧义通过命令返回“需要确认”，必须向用户取得明确选择。详见 [任务选择规则](docs/task-selection.md)。继续任务以已有状态为准，不重选。
+新任务按 [平台与视角选择](docs/task-selection.md) 解析。平台、视角及流程开关只读取本地 `.env`，`.env.example` 仅供 `setup` 复制，运行时不作回退。
 
-平台产物规格与适配器接线登记在 `platforms.py` 注册表，控制器与命令入口只查表。微信与小红书均已完整接入；小红书发布默认仅自己可见，公开需显式 `--public`，可先 `--dry-run` 预演。写作 Skill 由 `platforms.writer_skill(state)` 按平台与视角解析，不要凭主题词自行切换。接入清单见 [平台适配器契约](docs/platforms.md)。
+1. 用户明确选择优先，由 Agent 转为 `--platform wechat|rednote`、`--perspective blogger|tech|product`。未指定的维度不擅自传参；话题词不等于选择意图。
+2. 未指定平台时，采用配置中唯一启用项；零项或多项启用必须向用户确认，不自动选择首项。模板默认启用微信，没有 `.env` 时平台没有默认项。
+3. 未指定视角时读取 `WriterRole`，缺省默认自媒体博主，无需确认。微信支持 `blogger` / `tech` / `product`，小红书仅支持 `blogger`；遇到不支持的组合，说明限制并取得明确选择，不静默切换。
+4. 继续任务沿用状态中的平台、视角、流程开关与封面快照，不因 `.env` 后续变化重选。可先用 `preferences` 查看解析结果。
 
-## 能力要求
+微信封面设计前读取任务样式快照。只把用户明确选择的维度转为 `--cover-layout`、`--cover-visual-style`、`--cover-color-tone`；未确定且有歧义的维度请用户选择。修改当前任务用 `workflow cover-style`，已完成封面须先退回 cover。版式、视觉风格、色调及左文右图验收规则见 [封面样式](docs/cover-style.md)，设计时读取。
 
-| 工作 | 所需能力 | 缺少能力时 |
-|---|---|---|
-| 研究与核实 | 搜索、网页读取或用户资料 | 使用已有资料，说明无法核实的信息 |
-| 写作 | 文本生成 | 由用户提供正文 |
-| 保存产物 | 文件读写 | 提供内容和保存说明，不声称已保存 |
-| 本地生图 | 命令执行、Python、可访问的 ComfyUI | 用户选择已配置的宿主生图能力，或保留提示词 |
-| 排版 | 命令执行、Python、PyYAML | 提供项目命令供用户执行 |
-| 上传草稿 | 命令执行、Python、Requests、网络及公众号凭证 | 交付 HTML、图片和发布命令 |
-| 发布小红书笔记 | 命令执行、Python、Playwright + Chromium、网络及创作平台 Cookie | 交付组图、文案和发布命令（可 dry-run 预演） |
+## 按阶段读取 Skill
 
-“搜索”“写文件”“生成图片”描述能力，不是固定 API。工具参数、返回值、凭证及计费由宿主和后端决定。未实际生成的文件或草稿不能作为已完成产物交付。
+以任务状态中的平台、视角和当前阶段为准。默认博主视角不因主题涉及技术或产品自动切换；微信长文规则不套用到小红书。
 
-## 固定写作流程
+| 任务或阶段 | 项目内 Skill |
+|---|---|
+| 微信 `blogger` | [wechat-blogger-writer](skills/wechat-blogger-writer/SKILL.md) |
+| 微信 `tech` | [wechat-tech-writer](skills/wechat-tech-writer/SKILL.md) |
+| 微信 `product` | [wechat-product-manager-writer](skills/wechat-product-manager-writer/SKILL.md) |
+| 小红书图文 | [rednote-note-writer](skills/rednote-note-writer/SKILL.md) |
+| 生成、替换或导入图片，含卡片渲染 | [openwrite-images](skills/openwrite-images/SKILL.md) |
+| 微信第七步排版 | [wechat-article-formatter](skills/wechat-article-formatter/SKILL.md) |
+| 上传微信草稿 | [wechat-draft-publisher](skills/wechat-draft-publisher/SKILL.md) |
+| 发布小红书笔记 | [rednote-publisher](skills/rednote-publisher/SKILL.md) |
 
-整体三模块：**下发需求 → 写作 → 发布**。需求与发布需用户确认；写作内部由代码门禁推进，期间仍可按需人工介入。
+小红书第七步由根命令组装与校验已渲染卡片，不调用微信排版 Skill。
 
-**搜索资料 → 分析资料 → 写正文 → 生成封面 → 按需生成正文配图 → 生成 Markdown → 排版并保存可发布产物**
+## 工作区与状态管理
 
-三种写作视角共用七步，状态由 `workflow.json` 管理。第三步保存 `draft.md`，前五步产物检查通过后运行 `workflow finalize` 生成 `article.md`（第六步），再运行 `openwrite.py format` 生成 `article.html` 与 `publish-manifest.json` 并自动完成第七步。内容结构图属于按需生成的正文配图，不单独设阶段。工作区初始化或中途暂存不代表可发布产物已交付。
+每篇文章使用独立的 `articles/<名称>/`。根目录放可交付产物，`process/` 放需求、资料与草稿，`workflow/` 放状态、验收与发布记录。完整文件映射由 `layout.py` 管理，见 [工作区目录分层](docs/workflow.md#工作区目录分层)；Skill 中裸文件名按此映射解析，旧平铺目录用 `workflow migrate` 升级。个人文章默认忽略 Git。
 
-分析完成后、写正文之前有**标题与大纲检查点**：给出三个备选标题（至少一个 `激进悬念`、一个 `客观中性`，第三个默认 `利益实用`）与大纲，用户选定标题并确认大纲后才写全文，可反复讨论修改；记录在 `outline.md` 与 `outline.json`，`draft.md` 的 H1 必须与已确认标题一致。是否启用由 `.env` 的 `OutlineApproval` 控制（默认 `true`），用户明确授权时可用 `new --skip-outline`；选择在创建任务时落盘，之后改配置不影响已有任务。
+所有创作命令通过 `openwrite.py` 执行；不能直接修改 `workflow.json` 或调用底层脚本绕过门禁。同一任务顺序推进，不并发修改状态。`new` 和 `workflow init` 只初始化，不代表正文、图片或可发布产物已完成。
 
-通过 `workflow status <目录>` 查看进度，通过 `workflow complete <目录> --step <步骤>` 提交前五步；返工使用 `workflow reset <目录> --from <步骤>`。协议与产物示例见 [七步工作流](docs/workflow.md)。每次推进都会检查已完成产物，发现过期时需要退回重做。
+入口与子脚本使用同一 Python 环境。文档中的 `python3` 指已安装依赖的解释器；路径、环境初始化、Windows 限制、凭证与看板操作见 [环境与运行](docs/setup.md)。
 
-## 独立图片能力
+## 创作与确认边界
 
-只有流程到达 cover/content 时，项目图片入口才允许处理相应图片。按 [配图交接协议](docs/image-contract.md) 提交 `image-requests.json`。项目流程读取 [openwrite-images](skills/openwrite-images/SKILL.md)，执行图片需求后取得图片和 `image-results.json`，再交回写作侧做视觉验收。宿主工具或其他方式取得的图片也按同一需求导入，避免绕开文件与尺寸检查。
+整体为 **下发需求 → 写作 → 发布**。需求与发布须有用户确认；写作内部按代码门禁推进，不因每次执行命令额外询问。
 
-```bash
-python3 openwrite.py image articles/my-topic --id cover --backend comfyui
-python3 openwrite.py image articles/my-topic --id cover --backend file --source /path/to/image.png
-```
+写作共七个阶段：**搜索资料 → 分析资料 → 写正文 → 生成封面 → 生成内容配图 → 生成 Markdown → 生成可发布交付件**。开始推进时读取 [七步工作流](docs/workflow.md)，按当前阶段准备产物、提交并处理检查结果。
 
-`--fit exact` 默认拒绝尺寸不符的图片；`contain` 留白适配，`cover` 裁剪适配。后两者必须显式选择，并复查构图和文字。已有图片默认不覆盖。Pillow 负责实际图片解码与尺寸检查，视觉内容仍由写作侧验收。
+- 搜索保存来源及实际提取内容，分析使用 `source:<id>` 关联来源。事实与数据须有依据，不把虚构经历写成作者真实体验。
+- 分析后、全文前执行标题与大纲检查点：除非任务已授权跳过，先给出三个候选标题（含 `激进悬念`、`客观中性`，第三个默认 `利益实用`）和大纲，等用户选定标题并确认。每轮更新 `process/outline.md`，确认后写入 `workflow/outline.json`；未确认不写全文，草稿 H1 与确认标题一致。结构化记录及开关规则见 [检查点协议](docs/workflow.md#标题与大纲检查点)。
+- 图片阶段只有取得实际图片并完成视觉验收后才提交；不能把需求文件或 `ready` 状态当作验收通过。具体职责见下一节。
+- 第六步必须用 `workflow finalize` 整合 Markdown，不能另写最终正文绕过控制器。第七步用 `format` 校验并写入 `workflow/publish-manifest.json`。
+- 正文、需求或已完成产物变化后，先 `workflow reset --from <最早受影响步骤>`，再重做下游；文件保留，状态失效。正文变化后复核封面与正文图是否匹配，复用图片也需重新验收。操作见 [返工与恢复](docs/workflow.md#返工与恢复)。
 
-## 路径与继续创作
+交付形态按平台区分：微信为 `article.md`、`article.html`、独立 `cover.png` 与可选正文图；小红书为 `note.md` 与 `xhs-*.png`，封面是首图，至少一张内容卡片。微信正文配图可为零张，但须明确记录理由；小红书不能选择无需内容卡片。两者均须生成发布清单，只有通过第七步才称为可发布产物。
 
-- `openwrite.py` 总是相对于自身位置寻找 `skills/` 与 `articles/`，不依赖全局安装目录。
-- `new` 总是在项目 `articles/` 下创建文章；`format`、`publish` 的文章目录参数相对于调用时的工作目录，也支持绝对路径。
-- 项目创作统一使用根命令，保证阶段检查生效；底层脚本独立使用时不提供相同的流程保证。
-- 同一篇文章的工作流状态、需求、资料、分析、`draft.md`、`article.md`、图片及 `article.html` 放在同一目录。更换 Agent 或会话后，先读取该目录需求与产物。
-- 正文配图使用同目录相对路径。封面命名为 `cover.png`，不嵌入正文；发布时单独上传。
-- 图片能力读取后端输出，校验实际文件后保存到文章目录；如果后端输出在本机不可访问，应报告失败。
+## 图片职责与验收
 
-## 环境与命令
+写作 Skill 只定义画面内容、尺寸、色调、构图、文字、插入位置或卡片顺序及验收要求，不包含后端、模型或 API 调用。项目流程按 [配图交接协议](docs/image-contract.md) 调度 `openwrite-images`，执行后回交写作侧验收。宿主工具生成或用户提供的图片也通过项目 `image --backend file` 导入。
 
-在项目根目录创建虚拟环境并安装 `requirements.txt`。使用同一 Python 环境调用入口及子脚本。
+执行图片需求前读取图片 Skill，核对来源授权、`--fit` 默认行为及覆盖选项；ComfyUI、在线生图、图库、文件和 HTML 卡片后端配置由该 Skill 维护。微信封面不嵌正文；正文图片用同目录相对路径。小红书文案不嵌卡片，组图顺序以发布清单为准。
 
-```bash
-python3 openwrite.py doctor
-# 需要上传草稿时：生成本地 .env 并填写微信凭证
-python3 openwrite.py setup
-python3 openwrite.py new my-topic --title "文章标题" --type tech
-python3 openwrite.py workflow status articles/my-topic
-# 实际完成并按顺序提交前五步后
-python3 openwrite.py workflow finalize articles/my-topic
-python3 openwrite.py format articles/my-topic --theme default
-python3 openwrite.py publish articles/my-topic --title "文章标题"
-```
+验收须实际查看图片，核对主题、文字、事实、色调与构图。具备看图能力的 Agent 可自行记录 `--reviewed --note`，无需逐图询问用户；没有看图能力时挂起该步交用户确认，不伪造验收。需求变化后核对需求指纹、实际图片与旧验收，不沿用过期结果。
 
-`doctor` 不联网，不确认 ComfyUI 在线或微信凭证有效。`publish` 会实际调用微信 API，只有用户要求上传草稿时才执行。`board` 启动本地只读实时故事板（左侧任务列表分页/过滤，右侧选中任务的七步进展与交付件缩略图），用于观察创作进度，不参与状态推进。`new` / `workflow init` 成功后自动后台拉起看板并打开默认浏览器（`OPENWRITE_BOARD_AUTO=0` 关闭；已运行则复用），`board --stop` 停止后台进程。
+## 发布与交付
 
-默认排版器会对全文进行中英文间距和引号预处理，包括代码示例。需要保留原文时用 `format --no-preformat`。项目入口自动执行微信代码块兼容转换。
+写稿或排版不隐含发布授权。用户明确要求上传草稿或发布笔记后，读取对应发布 Skill，核对当前产物与发布清单指纹一致，再执行根命令 `publish`。确认后产物变化使旧确认失效，须重新完成产物校验并取得发布确认。
 
-微信凭证放在项目本地 `.env`：运行 `python3 openwrite.py setup` 从 `.env.example` 复制生成（不覆盖已有文件，权限 600，已被 Git 忽略），再填写 `WeChatAppID`、`WeChatAppSecret`，可选 `WeChatAuthor`。发布器不再读取 `~/.wechat-publisher/config.json`；access_token 缓存仍在 `~/.wechat-publisher/token_cache.json`。配图的服务地址与密钥同样在 `.env`（`COMFYUI_SERVER_URL`、`FAL_KEY`/`FAL_AI_API_KEY`、`TENCENT_TOKENHUB_API_KEY`、`PEXELS_API_KEY`、`PIXABAY_API_KEY`、`UNSPLASH_ACCESS_KEY`），模型档案与来源优先级等规则在 `skills/openwrite-images/config.json`；写作 Skill 只通过 `image-requests.json` 提交设计需求与来源偏好。不要将真实密钥写入 `.env.example` 或加入版本控制，也不代用户填写凭证。
+微信上传草稿箱，群发由用户在微信后台操作；小红书通过创作服务平台页面发布，默认仅自己可见，公开必须有明确授权并传 `--public`。可先 `--dry-run` 做本地检查。Cookie 失效或执行失败时如实报告，未观察到成功信号不声称已发布。成功记录与检查细节见 [发布协议](docs/workflow.md#发布)。
 
-## English
+交付说明已完成阶段、实际产物路径及未完成内容。未生成的图片、文件和草稿不能称为完成；缺少搜索、文件、命令或图片能力时说明缺口，提供已有内容、需求或可继续执行的命令。使用宿主实际工具，不依赖固定 API。凭证只按配置文档存入本地环境，不代填，不写入模板或提交仓库。
 
-Open the repository in your agent and read [AGENTS.md](AGENTS.md). The skills live in `skills/` and article workspaces in `articles/`; global skill installation is unnecessary. `CLAUDE.md` and `GEMINI.md` redirect to the same project instructions. If the host does not load project instructions automatically, explicitly ask it to read `AGENTS.md`.
+## 工程维护与文档分工
 
-Writing skills submit backend-neutral requests to `image-requests.json`. The independent `openwrite-images` capability owns acquisition, backend configuration, decoding, dimension checks, and `image-results.json`. Image readiness still requires visual review.
+| 位置 | 维护内容 |
+|---|---|
+| `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` | 只引导本指南 |
+| `README.md` / `README.en.md` | 项目介绍、快速开始和文档导航，保持中英文对应 |
+| 本指南 | Agent 决策规则、技能路由、确认边界与交付要求 |
+| `docs/setup.md` | 环境、凭证、命令运行、排版选项、看板与排错 |
+| 其他 `docs/` | 阶段协议、JSON 示例、选择规则、图片契约与平台接入 |
+| `skills/` | 当前阶段的创作方法与底层能力操作 |
 
-Platform differences are data in the `platforms.py` registry (artifact shape, dimensions, image counts, limits, renderer and publisher skills); the controller and command entry only read that table, and `workflow status` names the writing skill for the saved platform and perspective. WeChat and Rednote are both fully implemented. Rednote publishing drives the creator platform's publish page with Playwright (the site signs its own requests); it defaults to private visibility, requires an explicit `--public` for public notes, and supports `--dry-run`. `implemented` and `publish_implemented` are independent switches. See the [platform adapter contract](docs/platforms.md) for the onboarding checklist and phased roadmap.
+新增或改变行为时更新负责该细节的文档，其他位置保留必要概述和链接。平台规格、产物名、尺寸、上限与 Skill 接线以 `platforms.py` 为准；`implemented` 与 `publish_implemented` 分别控制产物及发布支持。接入开发先读 [平台适配器契约](docs/platforms.md)。
 
-Map the documented capabilities to the host's actual tools. Report missing capabilities and provide text, prompts, or commands instead of claiming unexecuted work. Continue an article by reading its `brief.md` and existing artifacts.
-
-`openwrite.py` finds its resources relative to the project, independent of the shell working directory. `new` creates a workspace under the project; `format` and `publish` accept a directory relative to the caller or an absolute path. Use one Python environment for the entrypoint and child scripts.
-
-`doctor` performs local checks only. `format` also converts code blocks for WeChat; use `--no-preformat` to preserve original code quotes and spacing. `publish` calls the WeChat API, requires HTML and a cover, and should run when the user requests an upload. Credentials live in the project-local `.env`: run `python3 openwrite.py setup` to copy the tracked `.env.example` template (never overwritten, mode 600, Git-ignored), then fill in `WeChatAppID`, `WeChatAppSecret`, and optionally `WeChatAuthor`. The publisher no longer reads `~/.wechat-publisher/config.json`; the token cache stays at `~/.wechat-publisher/token_cache.json`. Never commit real secrets. Rednote publishing reads `XhsCreatorCookie` from the same `.env`, defaults to private visibility, and needs an explicit `--public` for public notes. Project-local skills still require setup for external services.
-
-Workflow progress is persisted in `workflow.json` across seven stages. Submit the first five with `workflow complete`, inspect with `workflow status`, and redo with `workflow reset --from`. `workflow finalize` generates `article.md` (stage six); `format` produces the publishable artifact and completes stage seven. Between analysis and draft, a title/outline checkpoint requires user approval of three candidate titles and an outline (`outline.md` / `outline.json`), controlled by `OutlineApproval` in `.env` and skippable with `--skip-outline` when authorized. Root image, format and publish commands enforce prerequisite state; `publish` also requires the `publish-manifest.json` fingerprints to match the current artifacts. Low-level scripts remain independent.
-
-微信封面可通过本地 `.env` 的 `WeChatCoverLayout`、`WeChatCoverVisualStyle`、`WeChatCoverColorTone` 配置三个独立维度。按任务参数覆盖并保存快照，详见 [封面样式](docs/cover-style.md)。
+优先使用 `--perspective`，`--type` 仅为旧版兼容。按改动范围验证；完整测试命令为 `.venv/bin/python -m unittest discover -s tests -v`。文档改动检查本地链接、锚点、命令与代码是否一致，不为纯文字变更新增实现镜像测试。
