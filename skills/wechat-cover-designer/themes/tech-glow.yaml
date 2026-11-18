@@ -1,0 +1,53 @@
+name: 深色科技·发光标题
+description: 还原旧科技封面合成方式：深蓝科技底图、左侧 smoothstep 渐变暗层、双层光晕标题与独立英文副标题，无装饰横线
+layout_aliases: [tech-glow, 科技发光, 深色科技]
+
+visual_style: 克制的深色科技概念插画
+color_tone: 深海军蓝与冷蓝青色光效
+
+background:
+  type: gradient
+  rule: >-
+    continuous dark navy technology background, smooth transition across the full image,
+    no hard split or separate solid panel; NO TEXT, NO LETTERS, NO WORDS, no logos,
+    no accent lines or decorative horizontal rules
+subject:
+  region: right
+  width_ratio: 0.4
+  scene: >-
+    one topic-relevant technology focal point with restrained luminous nodes, light trails
+    or particles; the actual subject must follow the article, not a fixed robot or video editor
+  fit: contained on the right with clear breathing room, away from the left headline region
+text:
+  region: left
+  width_ratio: 0.55
+  position: center-left
+  positions: [top-left, center-left, bottom-left]
+  scrim: false
+  levels: [title, subtitle, tagline]
+  guidance: stays dark and low-detail for a bold headline, an optional English subtitle and a small tagline
+  overlay_defaults:
+    effect: tech-glow
+    font_size: 92
+    subtitle_size: 28
+    tagline_size: 26
+    margin_ratio: 0.0625
+    title_subtitle_gap: 42
+    subtitle_tagline_gap: 14
+    vertical_offset: -6
+    color: '#ffffff'
+    subtitle_color: '#8cd7ff'
+    tagline_color: '#d2d7e6f0'
+    glow_color: '#6eaaff'
+    subtitle_glow_color: '#50a0e6'
+    glow_radius: 14
+    subtitle_glow_radius: 8
+    panel_color: '#060c26'
+    panel_alpha: 205
+    panel_fade_ratio: 0.55
+acceptance:
+  - 右侧主体与文章主题对应，画面有层次但不杂乱
+  - 左侧暗层由深到透明平滑过渡，没有实心面板或左右硬分割
+  - 大标题白色冷蓝双层发光，副标题浅蓝，标语弱化且清楚
+  - 中文粗体与英文粗体分别选字体，长标题适配左侧文字区、不压主体
+  - 无装饰横线、accent line、底图乱码或重复文字

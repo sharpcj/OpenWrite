@@ -271,7 +271,7 @@ class WeChatPublisher:
 
         return content
 
-    def _upload_content_images(self, content: str, base_dir: str = ".") -> str:
+    def _upload_content_images(self, content: str, base_dir: str = ".", uploader=None) -> str:
         """
         扫描HTML中的本地图片并上传到微信，替换为微信URL
 
@@ -300,35 +300,29 @@ class WeChatPublisher:
             if src.startswith(('http://', 'https://')):
                 return match.group(0)
 
-            # 跳过封面图（已单独处理）
-            if 'cover' in src.lower():
-                return match.group(0)
 
             # 构建完整路径
             image_path = Path(base_dir) / src
 
             if not image_path.exists():
-                print(f"  ⚠️ 图片不存在，跳过: {src}")
-                return match.group(0)
+                raise FileNotFoundError(f"正文图片不存在，中止发布: {src}")
 
             try:
                 # 上传图片并获取URL
-                _, wechat_url = self.upload_image(str(image_path), return_url=True)
+                _, wechat_url = (uploader or self.upload_image)(str(image_path), return_url=True)
 
                 if wechat_url:
                     uploaded_count += 1
                     # 替换为微信URL
                     return f'<img{before_src}src="{wechat_url}"{after_src}>'
                 else:
-                    print(f"  ⚠️ 未获取到URL，保持原路径: {src}")
-                    return match.group(0)
+                    raise ValueError(f"正文图片未返回 URL，中止发布: {src}")
 
             except Exception as e:
-                print(f"  ⚠️ 上传图片失败 {src}: {e}")
-                return match.group(0)
+                raise ValueError(f"正文图片上传失败，中止发布: {src}") from e
 
         # 执行替换
-        content = re.sub(img_pattern, replace_image, content)
+        content = re.sub(img_pattern, replace_image, content, flags=re.IGNORECASE)
 
         if uploaded_count > 0:
             print(f"  ✓ 成功上传 {uploaded_count} 张内容图片")
@@ -619,7 +613,8 @@ class WeChatPublisher:
                     thumb_media_id: str = "",
                     digest: str = "",
                     show_cover_pic: int = 1,
-                    content_base_dir: str = ".") -> Dict[str, Any]:
+                    content_base_dir: str = ".", prepare_only=False,
+                    image_uploader=None) -> Dict[str, Any]:
         """
         创建草稿文章
 
@@ -640,7 +635,7 @@ class WeChatPublisher:
 
         # 2. 上传内容中的其他图片并替换为微信URL
         print("\n→ 正在处理内容中的图片...")
-        content = self._upload_content_images(content, content_base_dir)
+        content = self._upload_content_images(content, content_base_dir, image_uploader)
 
         # 3. 修复微信编辑器的样式破坏问题
         content = self._fix_wechat_editor_issues(content)
@@ -706,8 +701,6 @@ class WeChatPublisher:
         if digest != original_digest:
             print(f"⚠ 摘要超长，已自动截断")
 
-        token = self.get_access_token()
-        url = f"{self.BASE_URL}/draft/add?access_token={token}"
 
         # 构建文章数据
         articles = {
@@ -724,6 +717,11 @@ class WeChatPublisher:
             }]
         }
 
+        if prepare_only:
+            return articles
+
+        token = self.get_access_token()
+        url = f"{self.BASE_URL}/draft/add?access_token={token}"
         headers = {'Content-Type': 'application/json; charset=utf-8'}
         # 手动序列化JSON，确保中文不被转义
         data = json.dumps(articles, ensure_ascii=False).encode('utf-8')
@@ -761,6 +759,36 @@ class WeChatPublisher:
 
         return result
 
+    def prepare_draft_add(self):
+        """Fetch before the journal becomes in_flight; consumed once by add."""
+        self._draft_add_token = self.get_access_token()
+
+    def draft_request(self, operation, payload):
+        """Single bounded request; draft/add is NEVER replayed automatically."""
+        if operation not in ('add', 'get', 'batchget'):
+            raise ValueError('Unsupported draft operation')
+        token = self.__dict__.pop('_draft_add_token', None) if operation == 'add' else None
+        if token is None:
+            token = self.get_access_token()
+        response = requests.post(
+            f'{self.BASE_URL}/draft/{operation}', params={'access_token': token},
+            data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+            headers={'Content-Type': 'application/json; charset=utf-8'}, timeout=(10, 30))
+        response.raise_for_status()
+        result = response.json()
+        if result.get('errcode', 0):
+            # Only explicit token rejections prove no creation. Never replay add.
+            if result['errcode'] in (40001, 42001):
+                try:
+                    self.get_access_token(force_refresh=True)
+                except Exception:
+                    pass  # cannot mask the already-certain rejection
+                if operation == 'add':
+                    from wechat_reliability import DraftRejected
+                    raise DraftRejected(self._handle_api_error(result['errcode'], '', '草稿add'))
+            raise ValueError(self._handle_api_error(result['errcode'], '', '草稿' + operation))
+        return result
+
 
 def _redact_secret(text) -> str:
     """脱敏：隐藏错误信息中可能携带的 access_token / secret 参数，避免泄露到终端日志"""
@@ -790,11 +818,31 @@ def main():
     parser.add_argument('-d', '--digest', help='文章摘要')
     parser.add_argument('--account', help='公众号账号名（openwrite.yaml 中 wechat.accounts 下的键；缺省用唯一账号或 default_account）')
     parser.add_argument('--interactive', action='store_true', help='交互式模式')
+    parser.add_argument('--state-dir', help='文章发布状态目录（默认 HTML 同目录的 workflow）')
+    parser.add_argument('--bind-media-id', help='绑定未知请求的草稿 ID，仅精确回读，不创建')
+    parser.add_argument('--resume-fingerprint', help='恢复指定历史请求，不使用当前文章内容')
+    parser.add_argument('--list-draft-candidates', action='store_true', help='只查询最近 20 条候选，未找到不代表未创建')
 
     args = parser.parse_args()
 
     try:
         publisher = WeChatPublisher(account=args.account)
+
+        # Historical reads must not prompt or depend on current deliverables.
+        if args.list_draft_candidates or args.resume_fingerprint:
+            if not args.state_dir:
+                raise ValueError('恢复/候选查询必须提供 --state-dir')
+            sys.path.insert(0, str(PROJECT_ROOT))
+            from wechat_reliability import ReliableDraft
+            result = ReliableDraft(publisher, args.state_dir).publish(
+                bind_media_id=args.bind_media_id, resume_fingerprint=args.resume_fingerprint,
+                list_candidates=args.list_draft_candidates)
+            if args.list_draft_candidates:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                print('候选仅供人工定位；未找到不证明未创建，禁止据此重建。')
+            else:
+                print(f"✓ 草稿上传并精确核验成功 (verified)，media_id: {result['media_id']}")
+            return
 
         # 交互式模式
         if args.interactive:
@@ -844,28 +892,26 @@ def main():
         print(f"封面: {cover or '(无)'}")
         print(f"{'='*50}\n")
 
-        # 上传封面（如果有）
-        thumb_media_id = ""
-        if cover and os.path.exists(cover):
-            thumb_media_id = publisher.upload_image(cover)
-
-        # 创建草稿
-        result = publisher.create_draft(
-            title=title,
-            content=content,
-            author=author,
-            thumb_media_id=thumb_media_id,
-            digest=digest,
-            content_base_dir=os.path.dirname(os.path.abspath(content_file)) or "."
-        )
+        sys.path.insert(0, str(PROJECT_ROOT))
+        from wechat_reliability import ReliableDraft
+        state_dir = args.state_dir or str(Path(content_file).resolve().parent / 'workflow')
+        result = ReliableDraft(publisher, state_dir).publish(
+            title, content, author, str(Path(cover).resolve()), digest,
+            bind_media_id=args.bind_media_id, resume_fingerprint=args.resume_fingerprint,
+            list_candidates=args.list_draft_candidates,
+            content_base_dir=Path(content_file).resolve().parent)
+        if args.list_draft_candidates:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            print('候选仅供人工定位；未找到不证明未创建，禁止据此重建。')
+            return
 
         print(f"\n{'='*50}")
-        print("✓ 发布成功！请前往微信公众号后台查看草稿")
+        print(f"✓ 草稿上传并精确核验成功 (verified)，media_id: {result['media_id']}")
         print(f"{'='*50}")
 
     except KeyboardInterrupt:
         print("\n\n操作已取消")
-        sys.exit(0)
+        sys.exit(130)
     except Exception as e:
         print(f"\n✗ 错误: {_redact_secret(e)}")
         sys.exit(1)

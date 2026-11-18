@@ -1,26 +1,28 @@
 name: 左文右图·暖色人物
-description: 平滑暖色渐变背景 + 右侧紧凑人物剪辑场景 + 左侧三级文字，参考暖色编辑插画风格
+description: 奶油白到浅杏橙柔和渐变、右侧贴底生活插画、左侧品牌大标题与多行卖点和小标语
 layout_aliases: [左文右图, left-text-right-image]
 
-variables:
-  title-color: "#3D2C22"
-  tagline-color: "#9b8f7f"
+visual_style: 温暖柔和的编辑人物插画
+color_tone: 奶油白到浅杏橙的连续渐变
 
 background:
   type: gradient
   rule: >-
-    smooth continuous warm gradient background across the whole image, soft tonal
-    transition from left to right, no hard split, no separate text panel, no abrupt color cut
+    smooth continuous warm gradient background across the whole image, cream ivory
+    on the left blending softly into light apricot orange on the right; no hard split,
+    no separate text panel, no dark scrim, no accent lines or decorative horizontal rules
 
 subject:
   region: right
   width_ratio: 0.5
   scene: >-
-    ONE cohesive warm editorial illustration scene (prefer a friendly person at a desk
-    editing video on a computer, with a few floating video clips / play buttons / UI cards around)
+    ONE cohesive friendly everyday editorial illustration matching the article's actual subject,
+    such as a person using a laptop at a wooden desk with a coffee cup and green plant;
+    use only a few topic-relevant floating visual elements, never a fixed unrelated video-editing scene
   fit: >-
-    COMPACT vignette, vertically centered with generous empty gradient space above and below,
-    never touching or filling the top/bottom edges
+    a grounded scene naturally extending to the bottom edge; the desk, furniture or foreground
+    may be cropped by the bottom canvas edge, not a small floating vignette; keep the face and
+    key objects fully visible and reserve the left text area without overlap
 
 text:
   region: left
@@ -30,15 +32,25 @@ text:
   scrim: false
   levels: [title, subtitle, tagline]
   guidance: >-
-    stays quiet and uncluttered for three-level text (big bold title, medium subtitle,
-    small muted tagline)
-  title_height_ratio: 0.18
-  subtitle_height_ratio: 0.08
-  tagline_height_ratio: 0.05
-  margin_ratio: 0.06
+    stays quiet and uncluttered for a bold brand or topic headline, a substantial multiline
+    Chinese benefit statement and a small muted tagline, all aligned to the same left edge
+  overlay_defaults:
+    effect: warm-editorial
+    font_size: 62
+    subtitle_size: 44
+    tagline_size: 22
+    margin_ratio: 0.047
+    title_subtitle_gap: 52
+    subtitle_tagline_gap: 48
+    line_gap: 10
+    vertical_offset: 0
+    color: '#583720'
+    subtitle_color: '#483326'
+    tagline_color: '#928571'
 
 acceptance:
-  - 平滑渐变背景无硬切
-  - 右侧人物场景紧凑、上下留白、不填满边缘
-  - 左侧三级文字清晰、与边缘留白舒适、不压主体
-  - 底图不含任何文字
+  - 奶油白到浅杏橙平滑渐变，无硬切、独立面板或暗色遮罩
+  - 右侧生活场景贴底，允许桌面或前景延伸至底边，人物脸部和关键物件完整
+  - 左侧大标题、多行卖点、小标语三级清晰，文字实际左边缘对齐且不压右侧主体
+  - 英文品牌与中文卖点各用合适粗体，字色深棕，标语暖灰；不发光、不描边、不画装饰横线
+  - 底图不含任何文字，主体按文章内容选择，不机械复制参考图题材

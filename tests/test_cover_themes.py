@@ -35,10 +35,16 @@ class CoverThemeTests(unittest.TestCase):
         self.assertIn('smooth continuous warm gradient', design['instructions'])
         self.assertIn('right ~50%', design['instructions'])
         self.assertIn('left ~45%', design['instructions'])
-        self.assertEqual(design['overlay_defaults'],
-                         {'position': 'center-left', 'text_width_ratio': 0.45, 'scrim': False})
+        self.assertEqual(design['overlay_defaults']['position'], 'center-left')
+        self.assertEqual(design['overlay_defaults']['text_width_ratio'], 0.45)
+        self.assertFalse(design['overlay_defaults']['scrim'])
+        self.assertEqual(design['overlay_defaults']['effect'], 'warm-editorial')
+        self.assertEqual(design['overlay_defaults']['font_size'], 62)
+        self.assertEqual(design['overlay_defaults']['subtitle_size'], 44)
+        self.assertEqual(design['overlay_defaults']['color'], '#583720')
+        self.assertIn('extending to the bottom edge', design['instructions'])
+        self.assertNotIn('never touching', design['instructions'])
         self.assertEqual(design['positions'], ['top-left', 'center-left', 'bottom-left'])
-        self.assertEqual(design['text_defaults']['title_height_ratio'], 0.18)
         self.assertEqual(design['levels'], ['title', 'subtitle', 'tagline'])
 
     def test_single_title_theme_declares_one_level(self):

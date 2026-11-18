@@ -51,7 +51,7 @@ python publisher.py \
 
 3. **检查封面图**
    - 查找 `cover.png`
-   - 如缺失则警告但继续发布
+   - 缺失即中止，不创建无封面的草稿
 
 4. **调用发布脚本**
    ```bash
@@ -59,8 +59,8 @@ python publisher.py \
    ```
 
 5. **验证结果**
-   - 确认草稿创建成功
-   - 获取草稿 media_id
+   - 创建前保存 in_flight，取得 media_id 后先原子落盘再 draft/get 精确回读
+   - 只有 verified 才称为「已上传并核验」；只取得 ID 或退出码 0 不足以证明核验通过
 
 6. **提示用户**
    - 提供微信后台链接
@@ -116,6 +116,24 @@ wechat:
 - ✅ 错误处理和重试机制
 - ✅ 中文错误提示和解决方案
 - ✅ 交互模式和命令行模式
+
+### 可靠性与保守恢复
+
+项目入口使用根目录 `wechat_reliability.py`，在文章 `workflow/wechat-publish.json` 保存所有版本及状态历史。账号 AppID、最终元数据、处理后的 HTML、图片身份和顺序、封面字节共同参与指纹；同指纹已有 ID 时只回读，不重建。每张素材成功立即保存 SHA-256、ID、URL，恢复按账号隔离复用。正文图片失败必须中止；不允许保留本地路径创建草稿。
+
+跨进程文章锁覆盖素材、创建、回读和成功记录。创建 token 在 `in_flight` 前预取，失败确定未发送 add，可在下次显式发布重试；单次 add 消费预取 token，不再次获取。仅明确 token 拒绝白名单 `40001` / `42001` 标为 `rejected`，刷新失败不能掩盖拒绝，下次显式发布可复用素材重试，但同次执行绝不重放 add。`in_flight` 后网络/HTTP 失败、超时、中断、未返回 ID 或非白名单服务错误仍进入 `unknown`，进程硬退出留下的状态下次转为 `unknown`。未知请求即使内容或账号变化也阻止新建。取得 ID 后仅重试读取，最多三次；核对标题、作者、摘要、正文结构/文字与图片顺序和 URL、封面 ID；仅有限规范化 HTML 实体、属性顺序、空元素闭合，以及图片 src/data-src、微信 CDN 白名单内的协议与 /0、/640 尺寸后缀（素材主体和查询参数必须一致）。
+
+恢复必须通过项目入口。`--list-draft-candidates` / `--resume-fingerprint` 提前进入仅查询/旧请求核验分支：沿用任务平台和账号，不要求七步完成、清单有效或当前 HTML/封面存在，不询问作者/标题，也不读取当前正文。只能核验日志保存的旧 article，不上传或创建；候选查询不写成功记录，旧请求也须 verified 才记录。普通新创建及未带旧指纹的 `--bind-media-id` 仍须通过原门禁。底层恢复需显式 `--state-dir`：
+
+```bash
+python3 openwrite.py publish articles/<文章目录> --list-draft-candidates
+python3 openwrite.py publish articles/<文章目录> \
+  --resume-fingerprint <日志中的旧请求指纹> --bind-media-id <人工定位的草稿ID>
+```
+
+候选列表仅最近 20 条，未找到不证明未创建；不自动绑定，不解除未知状态，不写成功记录。没有 ID 则保持阻断，交用户在微信后台核对；禁止删除日志、换目录、清除 unknown 或加 force 来自动重建。人工绑定只核验旧请求；错误的未核验候选可重新绑定，创建响应保存的 ID 不可替换。只有 verified 写入带 media_id 与 fingerprint 的 publish-record，保留原平台/标题/可见性/时间字段。详见 [发布协议](../../docs/workflow.md#发布)，含 OS 锁支持、日志丢失/硬故障边界。
+
+本次未验证当前官方 draft/get、batchget 文档正文，契约仅有离线 mock 验证；未做真实微信调用或确认当前官方 HTML 重写行为。不顺带改变字段上限或图片上传 API，token 缓存写逻辑不变。
 
 ## 🛠️ 工作流集成
 

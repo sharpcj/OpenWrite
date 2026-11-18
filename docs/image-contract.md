@@ -70,7 +70,7 @@
 - `prompt`：图片内容与表达目的。可以是自然语言设计说明，不是后端调用参数。
 - `type`、`style`、`palette`、`composition`：画面类型、风格、配色及构图思路。
 - `text`：画面需要出现的原文列表；无文字时用空列表。微信封面使用 `overlay` 叠字时 `text` 必须为空，避免文字重复。
-- `overlay`：仅封面可用的叠字对象。`title` 必填（封面大标题，可短于文章标题）；`subtitle`（中副题）、`tagline`（小标语，弱化灰色小字）可选。**实际渲染哪些层次由封面主题的 `text.levels` 决定**，主题未声明的层次会被裁剪。`position`（`bottom-left` 等八个方位）、`color`、`tagline_color`、`font`、`font_size`、`subtitle_size`、`tagline_size`、`scrim` 可覆盖默认版式。与 `card` 互斥。
+- `overlay`：仅封面可用的叠字对象。`title` 必填（封面大标题，可短于文章标题）；`subtitle`（中副题）、`tagline`（小标语，弱化灰色小字）可选。**实际渲染哪些层次由封面主题的 `text.levels` 决定**，主题未声明的层次会被裁剪。`position`（`bottom-left` 等八个方位）、`color`、`tagline_color`、`font`、`font_size`、`subtitle_size`、`tagline_size`、`scrim` 可覆盖默认版式。与 `card` 互斥。科技主题另通过 `effect: tech-glow` 启用双层发光和左侧 smoothstep 暗层，支持独立副标题/标语字体、字色及光晕/暗层参数，见 [科技封面参数](cover-style.md#深色科技发光标题)。左文右图主题通过 `effect: warm-editorial` 启用无描边实心文字，支持独立字体与字色、明确换行、层间距及 `line_gap`，见 [暖色排版](cover-style.md#左文右图平滑渐变背景)；所有主题默认效果参数参与有效需求指纹。升级左文右图主题后旧结果会过期，需 reset cover 并重新验收；全幅单标题和科技主题不变。
 - `preferred_sources`：可选，来源偏好顺序（`comfyui` / `file` / `fal` / `hunyuan` / `pexels` / `pixabay` / `unsplash` / `html` / `gemini` / `dalle`），不重复；缺省按场景默认优先级。
 - `source_file`：可选，已有图片的本地路径（官方文档插图、宿主生图输出、用户图片），供 `file` 来源导入。宿主生图底图等中间图像文件应保存在 `process/`；被需求 `output` 或正文引用的成品图留根目录。
 - `source_url`、`attribution`：可选，图片原始出处链接与署名/版权信息，随结果保留以便溯源。

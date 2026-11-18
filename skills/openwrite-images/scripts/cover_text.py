@@ -163,8 +163,298 @@ def _scrim(draw_layer, width: int, height: int, box: tuple, position: str):
         draw.line([(0, y), (width, y)], fill=(10, 12, 18, alpha))
 
 
+def validate_tech_overlay(overlay: dict):
+    """Validate the opt-in renderer without reading config or loading fonts."""
+    import math
+    from PIL import ImageColor
+    if overlay.get('position', 'center-left') not in ('center-left', 'top-left', 'bottom-left'):
+        raise ValueError('tech-glow position 只支持 center-left / top-left / bottom-left')
+    limits = {
+        'font_size': (1, 4096), 'subtitle_size': (1, 4096), 'tagline_size': (1, 4096),
+        'text_width_ratio': (0.1, 0.9), 'margin_ratio': (0, 0.45),
+        'title_subtitle_gap': (0, 4096), 'subtitle_tagline_gap': (0, 4096),
+        'vertical_offset': (-4096, 4096), 'glow_radius': (0, 256),
+        'subtitle_glow_radius': (0, 256), 'panel_alpha': (0, 255),
+        'panel_fade_ratio': (0.01, 1),
+    }
+    for key, (low, high) in limits.items():
+        if key in overlay:
+            value = overlay[key]
+            if type(value) not in (int, float) or not low <= value <= high or not math.isfinite(value):
+                raise ValueError(f'tech-glow {key} 必须为 {low}–{high} 的有限数字')
+    for key in ('font', 'subtitle_font', 'tagline_font'):
+        if key in overlay and (not isinstance(overlay[key], str) or not overlay[key].strip() or '\x00' in overlay[key]):
+            raise ValueError(f'tech-glow {key} 必须为非空字体路径字符串')
+    for key in ('color', 'subtitle_color', 'tagline_color', 'glow_color',
+                'subtitle_glow_color', 'panel_color'):
+        if key not in overlay:
+            continue
+        value = overlay[key]
+        if isinstance(value, str):
+            try:
+                ImageColor.getcolor(value, 'RGBA')
+            except (ValueError, TypeError) as exc:
+                raise ValueError(f'tech-glow {key} 颜色无效') from exc
+        elif not (isinstance(value, (list, tuple)) and len(value) in (3, 4)
+                  and all(type(c) is int and 0 <= c <= 255 for c in value)):
+            raise ValueError(f'tech-glow {key} 必须为颜色字符串或 RGB/RGBA 整数数组')
+
+
+def _tech_color(value, alpha=True):
+    from PIL import ImageColor
+    color = ImageColor.getcolor(value, 'RGBA') if isinstance(value, str) else tuple(value)
+    assert isinstance(color, tuple)  # RGBA mode always returns a tuple.
+    return (color + (255,) if len(color) == 3 else color) if alpha else color[:3]
+
+
+def _tech_font(overlay, key, size):
+    """Separate Latin bold and CJK faces; an explicit path never falls back."""
+    from PIL import ImageFont
+    windows = Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts'
+    if key == 'subtitle_font' and not any(_is_cjk(char) for char in overlay.get('subtitle', '')):
+        candidates = ['/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+                      '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+                      '/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf',
+                      '/Library/Fonts/Arial Bold.ttf',
+                      '/System/Library/Fonts/Supplemental/Arial Bold.ttf', str(windows / 'arialbd.ttf')]
+    else:
+        weight = 'Regular' if key == 'tagline_font' else 'Bold'
+        candidates = [f'/usr/share/fonts/opentype/noto/NotoSansCJK-{weight}.ttc',
+                      f'/usr/share/fonts/truetype/noto/NotoSansCJK-{weight}.ttc',
+                      '/System/Library/Fonts/PingFang.ttc', '/Library/Fonts/Arial Unicode.ttf',
+                      str(windows / ('msyhbd.ttc' if key == 'font' else 'msyh.ttc'))]
+        candidates += image_config.cover_text_defaults().get('font_candidates', [])
+    if key in overlay:
+        candidates = [overlay[key]]
+    for candidate in candidates:
+        path = Path(candidate).expanduser()
+        if not path.is_file():
+            continue
+        try:
+            return ImageFont.truetype(str(path), size)
+        except (OSError, ValueError):
+            continue
+    if key in overlay:
+        raise ValueError(f'tech-glow {key} 显式字体无效：{overlay[key]}')
+    raise ValueError(f'tech-glow 未找到可用字体；请通过 overlay.{key} 配置本机字体路径')
+
+
+def _tech_wrap(text, font, max_width):
+    """Honor explicit newlines and split oversized Latin tokens as a last resort."""
+    lines = []
+    for paragraph in text.splitlines():
+        for line in wrap_text(paragraph, font, max_width):
+            if font.getbbox(line)[2] - font.getbbox(line)[0] <= max_width:
+                lines.append(line)
+                continue
+            current = ''
+            for char in line:
+                trial = current + char
+                box = font.getbbox(trial)
+                if current and box[2] - box[0] > max_width:
+                    lines.append(current.rstrip())
+                    current = char.lstrip()
+                else:
+                    current = trial
+            if current:
+                lines.append(current)
+    return [line for line in lines if line.strip()]
+
+
+def _tech_layout(overlay, width, height):
+    margin_ratio = overlay.get('margin_ratio', .0625)
+    margin = int(width * margin_ratio)
+    margin_y = int(height * margin_ratio)
+    max_width = min(int(width * overlay.get('text_width_ratio', .55)), width - 2 * margin)
+    available = height - 2 * margin_y
+    sizes = [int(overlay.get(k, v)) for k, v in
+             (('font_size', 92), ('subtitle_size', 28), ('tagline_size', 26))]
+    # Caller-requested small fonts stay small rather than growing to our floors.
+    floors = [min(s, f) for s, f in zip(sizes, (18, 12, 12))]
+    paths = [_tech_font(overlay, k, s).path for k, s in
+             zip(('font', 'subtitle_font', 'tagline_font'), sizes)]
+    from PIL import ImageFont
+    while True:
+        rows, y = [], 0
+        for level, (key, path, size) in enumerate(zip(('title', 'subtitle', 'tagline'), paths, sizes)):
+            font = ImageFont.truetype(path, size)
+            lines = _tech_wrap(overlay.get(key) or '', font, max_width)
+            if not lines:
+                continue
+            if rows:
+                y += int(overlay.get('subtitle_tagline_gap', 14) if level == 2
+                         else overlay.get('title_subtitle_gap', 42))
+            for index, line in enumerate(lines):
+                bbox = font.getbbox(line)
+                if index:
+                    y += max(2, int(size * .2))
+                rows.append({'level': level, 'text': line, 'font': font, 'bbox': bbox, 'y': y})
+                y += bbox[3] - bbox[1]
+        fits = y <= available and all(row['bbox'][2] - row['bbox'][0] <= max_width for row in rows)
+        if fits:
+            position = overlay.get('position', 'center-left')
+            top = (height - y) // 2 if position == 'center-left' else (
+                margin_y if position == 'top-left' else height - margin_y - y)
+            top += int(overlay.get('vertical_offset', -6))
+            top = max(margin_y, min(top, height - margin_y - y))
+            for row in rows:
+                # Place the visible ink, not the font's ascender origin.
+                row['xy'] = (margin - row['bbox'][0], top + row['y'] - row['bbox'][1])
+            return rows
+        if sizes == floors:
+            raise ValueError('封面文案过长，tech-glow 缩至最小字号仍放不下；请缩短文案')
+        sizes = [max(floor, size - 2) for size, floor in zip(sizes, floors)]
+
+
+def _tech_panel(image, overlay):
+    from PIL import Image, ImageDraw
+    layer = Image.new('RGBA', image.size)
+    draw = ImageDraw.Draw(layer)
+    fade_width = int(image.width * overlay.get('panel_fade_ratio', .55))
+    color = _tech_color(overlay.get('panel_color', (6, 12, 38)), alpha=False)
+    for x in range(fade_width):
+        t = x / fade_width
+        alpha = int(overlay.get('panel_alpha', 205) * (1 - t * t * (3 - 2 * t)))
+        draw.line([(x, 0), (x, image.height)], fill=color + (alpha,))
+    return Image.alpha_composite(image, layer)
+
+
+def _tech_glow_text(base, xy, text, font, fill, glow, glow_radius):
+    """Legacy tech writer's shadow → blur → blur-again → ink composites."""
+    from PIL import Image, ImageDraw, ImageFilter
+    shadow = Image.new('RGBA', base.size)
+    ImageDraw.Draw(shadow).text((xy[0] + 3, xy[1] + 5), text, font=font, fill=(0, 0, 0, 180))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(3))
+    glow1 = Image.new('RGBA', base.size)
+    ImageDraw.Draw(glow1).text(xy, text, font=font, fill=glow[:3] + (255,))
+    glow1 = glow1.filter(ImageFilter.GaussianBlur(glow_radius))
+    glow2 = glow1.filter(ImageFilter.GaussianBlur(glow_radius // 2 or 1))
+    ink = Image.new('RGBA', base.size)
+    ImageDraw.Draw(ink).text(xy, text, font=font, fill=fill)
+    for layer in (shadow, glow1, glow2, ink):
+        base = Image.alpha_composite(base, layer)
+    return base
+
+
+def _render_tech(base, output, overlay, width, height):
+    from PIL import Image, ImageDraw
+    validate_tech_overlay(overlay)
+    rows = _tech_layout(overlay, width, height)
+    with Image.open(base) as picture:
+        image = picture.convert('RGBA')
+    if image.size != (width, height):
+        raise ValueError(f'叠字底图尺寸 {image.size} 与需求 {(width, height)} 不符')
+    image = _tech_panel(image, overlay)
+    for row in rows:
+        level, xy = row['level'], row['xy']
+        if level < 2:
+            image = _tech_glow_text(
+                image, xy, row['text'], row['font'],
+                _tech_color(overlay.get('color' if level == 0 else 'subtitle_color',
+                                        (255, 255, 255, 255) if level == 0 else (140, 215, 255, 255))),
+                _tech_color(overlay.get('glow_color' if level == 0 else 'subtitle_glow_color',
+                                        (110, 170, 255) if level == 0 else (80, 160, 230))),
+                overlay.get('glow_radius' if level == 0 else 'subtitle_glow_radius', 14 if level == 0 else 8))
+        else:
+            draw = ImageDraw.Draw(image)
+            draw.text((xy[0] + 1, xy[1] + 2), row['text'], font=row['font'], fill=(0, 0, 0, 160))
+            draw.text(xy, row['text'], font=row['font'],
+                      fill=_tech_color(overlay.get('tagline_color', (210, 215, 230, 240))))
+    image.convert('RGB').save(output, format='PNG')
+    return Path(output)
+
+
+def validate_editorial_overlay(overlay: dict):
+    """Validate the warm typesetting profile before obtaining any artwork."""
+    import math
+    try:
+        validate_tech_overlay(overlay)
+    except ValueError as exc:
+        raise ValueError(str(exc).replace('tech-glow', 'warm-editorial')) from exc
+    if 'line_gap' in overlay:
+        value = overlay['line_gap']
+        if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 512:
+            raise ValueError('warm-editorial line_gap 必须为 0–512 的有限数字')
+    for key in ('title', 'subtitle', 'tagline'):
+        if key in overlay and not isinstance(overlay[key], str):
+            raise ValueError(f'warm-editorial {key} 必须为字符串')
+
+
+def _editorial_font(overlay, key, text, size):
+    # Latin headlines use real Latin bold, CJK headings use CJK bold, and
+    # taglines use regular. Explicit per-level fonts always take precedence.
+    if key == 'font' and not any(_is_cjk(char) for char in text):
+        selection = {'subtitle': text}
+        if key in overlay:
+            selection['subtitle_font'] = overlay[key]
+        return _tech_font(selection, 'subtitle_font', size)
+    return _tech_font(overlay, key, size)
+
+
+def _editorial_layout(overlay, width, height):
+    from PIL import ImageFont
+    validate_editorial_overlay(overlay)
+    margin = int(width * overlay.get('margin_ratio', .047))
+    margin_y = int(height * overlay.get('margin_ratio', .047))
+    max_width = min(int(width * overlay.get('text_width_ratio', .45)), width - 2 * margin)
+    sizes = [int(overlay.get(key, default)) for key, default in
+             (('font_size', 62), ('subtitle_size', 44), ('tagline_size', 22))]
+    floors = [min(size, floor) for size, floor in zip(sizes, (18, 12, 12))]
+    texts = [overlay.get(key) or '' for key in ('title', 'subtitle', 'tagline')]
+    paths = [str(_editorial_font(overlay, key, text, size).path) if text else None
+             for key, text, size in zip(('font', 'subtitle_font', 'tagline_font'), texts, sizes)]
+    while True:
+        rows, y = [], 0
+        for level, (text, path, size) in enumerate(zip(texts, paths, sizes)):
+            if not text or path is None:
+                continue
+            font = ImageFont.truetype(path, size)
+            lines = _tech_wrap(text, font, max_width)
+            if rows and lines:
+                y += int(overlay.get('subtitle_tagline_gap', 48) if level == 2
+                         else overlay.get('title_subtitle_gap', 52))
+            for index, line in enumerate(lines):
+                box = font.getbbox(line)
+                if index:
+                    y += int(overlay.get('line_gap', 10))
+                rows.append({'level': level, 'text': line, 'font': font, 'bbox': box, 'y': y})
+                y += box[3] - box[1]
+        if y <= height - 2 * margin_y and all(row['bbox'][2] - row['bbox'][0] <= max_width for row in rows):
+            position = overlay.get('position', 'center-left')
+            top = ((height - y) // 2 if position == 'center-left' else
+                   margin_y if position == 'top-left' else height - margin_y - y)
+            top = max(margin_y, min(top + int(overlay.get('vertical_offset', 0)), height - margin_y - y))
+            for row in rows:
+                row['xy'] = (margin - row['bbox'][0], top + row['y'] - row['bbox'][1])
+            return rows
+        if sizes == floors:
+            raise ValueError('封面文案过长，warm-editorial 缩至最小字号仍放不下；请缩短文案')
+        sizes = [max(floor, size - 2) for size, floor in zip(sizes, floors)]
+
+
+def _render_editorial(base, output, overlay, width, height):
+    """Clean warm headline + multiline message + muted tagline; no effects."""
+    from PIL import Image, ImageDraw
+    rows = _editorial_layout(overlay, width, height)
+    with Image.open(base) as picture:
+        image = picture.convert('RGBA')
+    if image.size != (width, height):
+        raise ValueError(f'叠字底图尺寸 {image.size} 与需求 {(width, height)} 不符')
+    colors = [overlay.get('color', '#583720'), overlay.get('subtitle_color', overlay.get('color', '#583720')),
+              overlay.get('tagline_color', '#928571')]
+    draw = ImageDraw.Draw(image)
+    for row in rows:
+        draw.text(row['xy'], row['text'], font=row['font'], fill=_tech_color(colors[row['level']]))
+    image.convert('RGB').save(output, format='PNG')
+    return Path(output)
+
+
 def render(base, output, overlay: dict, width: int, height: int):
     """Typeset title/subtitle onto the base image; write a new PNG."""
+    if overlay.get('effect') == 'tech-glow':
+        return _render_tech(base, output, overlay, width, height)
+    if overlay.get('effect') == 'warm-editorial':
+        return _render_editorial(base, output, overlay, width, height)
     from PIL import Image, ImageDraw
     base, output = Path(base), Path(output)
     position = overlay.get('position') or image_config.cover_text_defaults()['position']

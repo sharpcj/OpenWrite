@@ -75,6 +75,16 @@ def _validate_overlay(item: dict) -> None:
         raise ValueError('overlay.text_width_ratio 必须为 0.1–0.9 的数字')
     if 'scrim' in overlay and type(overlay['scrim']) is not bool:
         raise ValueError('overlay.scrim 必须是布尔值')
+    if overlay.get('effect', 'plain') not in ('plain', 'tech-glow', 'warm-editorial'):
+        raise ValueError('overlay.effect 只能为 plain / tech-glow / warm-editorial')
+    if overlay.get('effect') in ('tech-glow', 'warm-editorial'):
+        renderer = load_module('openwrite_cover_validation', 'cover_text.py')
+        # Resolve actual fonts and fit before any potentially billable backend.
+        if overlay['effect'] == 'tech-glow':
+            renderer.validate_tech_overlay(overlay)
+            renderer._tech_layout(overlay, item['width'], item['height'])
+        else:
+            renderer._editorial_layout(overlay, item['width'], item['height'])
 
 
 def _cover_requirement(article: Path, request: dict) -> dict:
@@ -108,6 +118,11 @@ def _cover_requirement(article: Path, request: dict) -> dict:
             overlay['position'] = defaults.get('position', 'center-left')
         cap = defaults.get('text_width_ratio', 0.45)
         overlay['text_width_ratio'] = min(overlay.get('text_width_ratio', cap), cap)
+        # Declared defaults enter the effective request and fingerprint. Editing
+        # a preset intentionally invalidates prior results that used that preset.
+        for key, value in defaults.items():
+            if key not in ('position', 'text_width_ratio', 'scrim'):
+                overlay.setdefault(key, value)
         overlay.setdefault('scrim', defaults.get('scrim', False))
         # 文字层次由主题定义：未声明的层次不渲染（如仅大标题的主题）。
         levels = design.get('levels') or ['title']

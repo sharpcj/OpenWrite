@@ -36,7 +36,7 @@ wechat:
       # writer_role: tech
       # outline_approval: true
       # 微信封面样式：theme 选预设主题（cover-designer），visual_style/color_tone 可选覆盖。
-      # 主题示例：left-text-right-image（左文右图·三级文字）/ full-bleed-single-title（全幅插画·居中标题）。
+      # 主题示例：left-text-right-image（暖色三级）/ full-bleed-single-title（全幅居中）/ tech-glow（旧科技发光）。
       # 用 cover_themes.py --list 查看全部主题；theme 也可填别名（如「左文右图」）。
       # 自定义构图可改用 layout 描述（不套预设）；文字层次由主题 text.levels 定义。
       cover:

@@ -434,7 +434,12 @@ class CoverOverlayTests(unittest.TestCase):
         workflow.initialize(self.article, '测试文章',
                             cover_style={'layout': '左文单标题', 'visual_style': '温暖插画',
                                          'color_tone': '暖黄奶油色'})
-        self.write_plan({'title': '大标题', 'subtitle': '副标题', 'tagline': '小标语'})
+        # Theme defaults now preflight real typography; use the WeChat canvas
+        # rather than the tiny 200x100 backend fixture used by plain overlays.
+        request = self.write_plan({'title': '大标题', 'subtitle': '副标题', 'tagline': '小标语'})
+        request.update(width=1024, height=432)
+        workflow.write_json(layout.path(self.article, 'image-requests.json'),
+                            {'version': 1, 'images': [request]})
         resolved = runtime.load_request(self.article, 'cover')
         self.assertEqual(resolved['overlay']['title'], '大标题')
         self.assertNotIn('subtitle', resolved['overlay'])

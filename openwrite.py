@@ -209,11 +209,30 @@ def record_publish(directory: Path, platform: str, title: str, visibility: str) 
 
 def publish_article(args: argparse.Namespace) -> int:
     directory = article_directory(args.article)
+    state = workflow.load(directory)
+    profile = platforms.require_publish_adapter(state)
+    recovery = getattr(args, 'list_draft_candidates', False) or getattr(args, 'resume_fingerprint', None)
+    if recovery:
+        if profile['rendered_artifact'] is None:
+            raise ValueError('微信草稿恢复参数不支持小红书')
+        if args.public or args.dry_run or args.headed:
+            raise ValueError('--public / --dry-run / --headed 仅支持小红书图文发布')
+        arguments = ['--state-dir', str(directory / 'workflow')]
+        for option in ('bind_media_id', 'resume_fingerprint'):
+            if getattr(args, option, None):
+                arguments.extend(['--' + option.replace('_', '-'), getattr(args, option)])
+        if getattr(args, 'list_draft_candidates', False):
+            arguments.append('--list-draft-candidates')
+        if state.get('account'):
+            arguments.extend(['--account', state['account']])
+        return run_skill(profile['publisher'], profile['publisher_entry'], *arguments)
     manifest = workflow.require_publishable(directory)
-    profile = platforms.require_publish_adapter(workflow.load(directory))
     if args.title and args.title != manifest['title']:
         print(f'注意：本次标题覆盖发布清单中的「{manifest["title"]}」')
     if profile['rendered_artifact'] is None:
+        if any(getattr(args, option, None) for option in (
+                'bind_media_id', 'resume_fingerprint', 'list_draft_candidates')):
+            raise ValueError('微信草稿恢复参数不支持小红书')
         return publish_card_set(args, directory, manifest, profile)
     if args.public or args.dry_run or args.headed:
         raise ValueError('--public / --dry-run / --headed 仅支持小红书图文发布')
@@ -226,6 +245,12 @@ def publish_article(args: argparse.Namespace) -> int:
     author = args.author if args.author is not None else manifest.get('author') or None
     digest = args.digest if args.digest is not None else manifest.get('digest') or None
     arguments = ['--title', title, '--content', str(content), '--cover', str(cover)]
+    arguments.extend(['--state-dir', str(directory / 'workflow')])
+    for option in ('bind_media_id', 'resume_fingerprint'):
+        if getattr(args, option, None):
+            arguments.extend(['--' + option.replace('_', '-'), getattr(args, option)])
+    if getattr(args, 'list_draft_candidates', False):
+        arguments.append('--list-draft-candidates')
     account = workflow.load(directory).get('account')
     if account:
         arguments.extend(['--account', account])
@@ -234,8 +259,8 @@ def publish_article(args: argparse.Namespace) -> int:
     if digest:
         arguments.extend(['--digest', digest])
     code = run_skill(profile['publisher'], profile['publisher_entry'], *arguments)
-    if code == 0:
-        record_publish(directory, workflow.load(directory)['platform'], title, 'draft')
+    # WeChat publisher writes publish-record atomically under its article lock,
+    # only after draft/get verification. Exit code alone is not publication proof.
     return code
 
 
@@ -298,9 +323,10 @@ def workflow_command(args: argparse.Namespace) -> int:
             raise ValueError('此封面样式命令目前仅用于微信任务')
         if len(state['completed']) > workflow.STEPS.index('cover'):
             raise ValueError('封面阶段已完成，请先 workflow reset <目录> --from cover')
-        changes = {key: getattr(args, 'cover_' + key, None) for key in ('layout', 'visual_style', 'color_tone')}
+        changes = {key: getattr(args, 'cover_' + key, None)
+                   for key in ('theme', 'layout', 'visual_style', 'color_tone')}
         if not any(value is not None for value in changes.values()):
-            raise ValueError('请指定至少一个 --cover-layout / --cover-visual-style / --cover-color-tone')
+            raise ValueError('请指定至少一个 --cover-theme / --cover-layout / --cover-visual-style / --cover-color-tone')
         updated = dict(state.get('cover_style', {}))
         updated.update({key: value for key, value in changes.items() if value is not None})
         state['cover_style'] = preferences.validate_cover_style(updated)
@@ -547,6 +573,9 @@ def main(argv: list[str] | None = None) -> int:
     publish.add_argument('--title', help='默认使用 publish-manifest.json 中已确认的标题')
     publish.add_argument('--author', help='默认使用清单作者（来自任务账号的 author 配置）')
     publish.add_argument('--digest', help='默认使用清单摘要')
+    publish.add_argument('--bind-media-id', help='微信未知请求恢复：绑定 ID 并精确回读，绝不自动重建')
+    publish.add_argument('--resume-fingerprint', help='恢复历史微信请求指纹（配合 --bind-media-id）')
+    publish.add_argument('--list-draft-candidates', action='store_true', help='只读查询微信最近草稿候选，不证明未创建')
     publish.add_argument('--public', action='store_true',
                          help='小红书公开发布；默认仅自己可见，公开需用户明确授权')
     publish.add_argument('--dry-run', action='store_true',

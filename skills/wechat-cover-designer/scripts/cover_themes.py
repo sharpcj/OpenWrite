@@ -71,6 +71,9 @@ def design_for(cover_style: dict) -> dict:
     background = theme.get('background') or {}
     subject = theme.get('subject') or {}
     text = theme.get('text') or {}
+    design['style'] = design['style'] or theme.get('visual_style')
+    if design['palette'] is None and theme.get('color_tone'):
+        design['palette'] = [theme['color_tone']]
     parts = [layout]
     if background.get('rule'):
         parts.append(str(background['rule']).strip())
@@ -90,6 +93,7 @@ def design_for(cover_style: dict) -> dict:
         'position': text.get('position', 'center-left'),
         'text_width_ratio': text.get('width_ratio', 0.45),
         'scrim': text.get('scrim', False),
+        **(text.get('overlay_defaults') or {}),
     }
     # 主题可声明允许的叠字方位（如居中式版式只允许水平居中相关方位）；
     # 未声明时沿用左文版式的左侧方位，保持旧主题行为。
