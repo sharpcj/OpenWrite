@@ -45,10 +45,10 @@ class CoverStyleTests(unittest.TestCase):
 
     def test_theme_field_selects_preset_and_cli_override(self):
         self.config.write_text('wechat:\n  accounts:\n    主号:\n      cover:\n'
-                               '        theme: left-text-single-title\n'
+                               '        theme: full-bleed-single-title\n'
                                '        color_tone: 暖黄奶油色\n', encoding='utf-8')
         style = preferences.cover_style(self.root)
-        self.assertEqual(style['theme'], 'left-text-single-title')
+        self.assertEqual(style['theme'], 'full-bleed-single-title')
         self.assertEqual(style['color_tone'], '暖黄奶油色')
         result = self.cli('new', 'single', '--cover-theme', 'left-text-right-image')
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -165,6 +165,59 @@ class CoverStyleTests(unittest.TestCase):
         with Image.open(out) as picture:
             self.assertEqual(picture.size, (1024, 432))
             self.assertIsNotNone(ImageChops.difference(picture, Image.open(base)).getbbox())
+
+    def test_single_title_theme_uses_full_cover_and_centers_text(self):
+        article = self.root / 'single-title'
+        article.mkdir()
+        workflow.initialize(article, '单标题封面', outline_approval=False,
+                            cover_style={'theme': 'full-bleed-single-title', 'color_tone': '暖黄奶油色'})
+        raw = {'id': 'cover', 'role': 'cover', 'output': 'cover.png', 'width': 1024,
+               'height': 432, 'prompt': '主题插画', 'text': [],
+               'overlay': {'title': '单行大标题', 'subtitle': '单标题主题不渲染副题',
+                           'color': '#3D2C22'}}
+        manifest = layout.path(article, 'image-requests.json')
+        workflow.write_json(manifest, {'version': 1, 'images': [raw]})
+        runtime = workflow.image_runtime()
+        resolved = runtime.load_request(article, 'cover')
+        self.assertEqual(resolved['overlay']['position'], 'center')
+        self.assertEqual(resolved['overlay']['text_width_ratio'], 0.8)
+        self.assertNotIn('subtitle', resolved['overlay'])
+        self.assertIn('the full ~100%', resolved['composition'])
+        self.assertIn('the full ~80%', resolved['composition'])
+        self.assertNotIn('the right ~50%', resolved['composition'])
+
+        # 主题限定居中方位：左侧方位回落到默认 center，居中方位保持用户选择。
+        workflow.write_json(manifest, {'version': 1, 'images': [dict(raw, overlay=dict(raw['overlay'],
+                                                                                          position='bottom-left'))]})
+        self.assertEqual(runtime.load_request(article, 'cover')['overlay']['position'], 'center')
+        workflow.write_json(manifest, {'version': 1, 'images': [dict(raw, overlay=dict(raw['overlay'],
+                                                                                          position='bottom-center'))]})
+        self.assertEqual(runtime.load_request(article, 'cover')['overlay']['position'], 'bottom-center')
+
+        try:
+            cover_text = runtime.load_module('cover_text_centered', 'cover_text.py')
+            cover_text.resolve_font({})
+        except ValueError:
+            self.skipTest('本机缺少可用中文字体')
+        overlay = runtime.load_request(article, 'cover')['overlay']
+        overlay['position'] = 'center'
+        width, height = 1024, 432
+        base = self.root / 'centered-base.png'
+        Image.new('RGB', (width, height), '#FFF3D2').save(base)
+
+        def text_box(name: str, title: str):
+            out = self.root / name
+            cover_text.render(base, out, dict(overlay, title=title), width, height)
+            with Image.open(base) as background, Image.open(out) as picture:
+                box = ImageChops.difference(picture.convert('RGB'),
+                                            background.convert('RGB')).getbbox()
+            self.assertIsNotNone(box)
+            return box
+
+        for name, title in (('centered-single.png', '单行大标题'),
+                            ('centered-wrapped.png', '单标题主题的长标题换行之后依然整行水平居中')):
+            box = text_box(name, title)
+            self.assertLessEqual(abs((box[0] + box[2]) / 2 - width / 2), 8)
 
     def test_legacy_request_fingerprint_is_unchanged_without_style_snapshot(self):
         article = self.root / 'old'

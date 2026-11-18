@@ -17,7 +17,7 @@ wechat:
 
 | 配置项 | 作用 | 示例 |
 |---|---|---|
-| `cover.theme` | 选择封面预设主题（名或别名） | left-text-right-image、left-text-single-title、左文右图 |
+| `cover.theme` | 选择封面预设主题（名或别名） | left-text-right-image、full-bleed-single-title、左文右图 |
 | `cover.layout` | 自定义构图描述（不套预设时改用此项） | 居中标题、上文下图、自定义构图描述 |
 | `cover.visual_style` | 图片的视觉表现形式 | 温暖插画、科技线稿、写实摄影、极简抽象、自定义品牌插画 |
 | `cover.color_tone` | 全图色彩和氛围 | 暖黄奶油色、青绿渐变、蓝紫渐变、品牌色及色值 |
@@ -31,8 +31,8 @@ wechat:
 ```bash
 # 使用账号配置中的默认值
 .venv/bin/python openwrite.py new my-topic --title "文章标题"
-# 本次改用单标题主题，其余沿用账号配置
-.venv/bin/python openwrite.py new another-topic --title "文章标题" --cover-theme left-text-single-title
+# 本次改用全幅居中标题主题，其余沿用账号配置
+.venv/bin/python openwrite.py new another-topic --title "文章标题" --cover-theme full-bleed-single-title
 # 只覆盖视觉风格，主题和色调继续采用各自的配置
 .venv/bin/python openwrite.py new third-topic --title "文章标题" --cover-visual-style "科技线稿"
 # 自定义构图（不套预设）并指定风格与色调
@@ -55,10 +55,10 @@ wechat:
 
 - 整张图使用**平滑连续的暖色渐变背景**，色调从左到右柔和过渡，不做硬拼接、独立文字面板或生硬的颜色切断。
 - 右侧约 50% 安排**一个完整的暖色编辑插画场景**（优先是一个友好的人物坐在桌前用电脑剪视频，周围漂浮少量视频片段/播放键/UI 卡片），场景有呼吸空间，不填满边缘。
-- 左侧约 45% 保持安静留白承载文字。**文字层次由主题定义**：`left-text-right-image` 主题为三级（大标题粗体深色最大、中副题中等字号、小标语弱化灰色小字）；`left-text-single-title` 主题仅一个大标题。按所选主题的 `text.levels` 提供文案。
+- 左侧约 45% 保持安静留白承载文字。**文字层次由主题定义**：该主题为三级（大标题粗体深色最大、中副题中等字号、小标语弱化灰色小字），按主题 `text.levels` 提供文案。
 - 底图不渲染文字；文案通过 `overlay` 的 `title` / `subtitle` / `tagline` 由 Pillow 精确叠加，实际渲染层次以主题 `text.levels` 为准。
-- 文字默认靠左垂直居中，可使用 `top-left` 或 `bottom-left`；排版宽度最多占全图 45%。长文案自动换行并按可读字号适配，放不下则报错，不把文字扩展到右侧。
-- 大标题字色由 `overlay.color` 指定（需与背景对比清楚），小标语字色由 `overlay.tagline_color` 指定（默认弱化暖灰 `#9b8f7f`）；左文右图默认关闭叠字暗色遮罩与偏移阴影，保留贯通背景、避免重影。底图主体是否靠右、文字是否压到主体，仍需看图验收。
+- 文字默认靠左垂直居中，可使用 `top-left` 或 `bottom-left`（主题只接受左侧方位）；排版宽度最多占全图 45%。长文案自动换行并按可读字号适配，放不下则报错，不把文字扩展到右侧。
+- 大标题字色由 `overlay.color` 指定（需与背景对比清楚），小标语字色由 `overlay.tagline_color` 指定（默认弱化暖灰 `#9b8f7f`）；该主题默认关闭叠字暗色遮罩与偏移阴影，保留贯通背景、避免重影。底图主体是否靠右、文字是否压到主体，仍需看图验收。
 
 需求示例中的 `overlay`（大标题可短于文章标题，细节交给副标题/标语）：
 
@@ -73,7 +73,22 @@ wechat:
 
 没有提供 overlay 时会使用任务标题创建默认叠字需求；但仍应由写作侧给出短大标题、副标题、小标语和合适字色。`text` 必须为空，避免背景生成的文字与程序叠字重复。
 
-其他自定义版式通过构图描述与已有 `overlay.position` / `text_width_ratio` 参数表达，不会被强行转换为左文右图。是否满足构图要求仍由写作侧视觉验收。
+## 全幅插画·居中标题
+
+`全幅单标题` / `full-bleed-single-title`（旧别名「left-text-single-title」「左文单标题」仍可解析）**不划分左右区域**：插画按完整封面尺寸铺满整幅画面，唯一的单行大标题在整幅封面水平居中。
+
+- 底图是一整幅暖色编辑插画，构图完整地铺满封面，主体元素偏向画面外圈，中部保留安静的渐变区域承载标题，不再使用左侧独立留白。
+- 文字只有一级大标题；`overlay.position` 默认 `center`，也可用 `top-center` / `bottom-center`，排版宽度最多占全图 80%，始终在整幅封面水平居中，长标题换行后仍逐行居中。
+- 主题默认关闭遮罩，标题沿用深色 `overlay.color`；标题与背景的对比、是否压住主体细节仍需看图验收。
+
+```json
+{
+  "title": "剪映困境",
+  "color": "#3D2C22"
+}
+```
+
+其他自定义版式通过构图描述与已有 `overlay.position` / `text_width_ratio` 参数表达，不会被强行转换为左文右图或全幅单标题。是否满足构图要求仍由写作侧视觉验收。
 
 ## 与写作和图片能力的衔接
 

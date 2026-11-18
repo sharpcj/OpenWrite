@@ -37,16 +37,35 @@ class CoverThemeTests(unittest.TestCase):
         self.assertIn('left ~45%', design['instructions'])
         self.assertEqual(design['overlay_defaults'],
                          {'position': 'center-left', 'text_width_ratio': 0.45, 'scrim': False})
+        self.assertEqual(design['positions'], ['top-left', 'center-left', 'bottom-left'])
         self.assertEqual(design['text_defaults']['title_height_ratio'], 0.18)
         self.assertEqual(design['levels'], ['title', 'subtitle', 'tagline'])
 
     def test_single_title_theme_declares_one_level(self):
-        design = cover_themes.design_for({'layout': '左文单标题'})
+        design = cover_themes.design_for({'layout': '全幅单标题'})
         self.assertEqual(design['levels'], ['title'])
         self.assertIn('single big bold title', design['instructions'])
 
+    def test_single_title_theme_is_full_bleed_and_centered(self):
+        design = cover_themes.design_for({'theme': 'full-bleed-single-title'})
+        self.assertEqual(design['theme'], '全幅插画·居中标题')
+        self.assertEqual(design['levels'], ['title'])
+        self.assertEqual(design['overlay_defaults'],
+                         {'position': 'center', 'text_width_ratio': 0.8, 'scrim': False})
+        self.assertEqual(design['positions'], ['center', 'top-center', 'bottom-center'])
+        self.assertIn('the full ~100%', design['instructions'])
+        self.assertIn('the full ~80%', design['instructions'])
+        self.assertNotIn('the right ~50%', design['instructions'])
+
+    def test_single_title_legacy_aliases_still_resolve(self):
+        for layout in ('left-text-single-title', '左文单标题'):
+            design = cover_themes.design_for({'theme': layout})
+            self.assertEqual(design['theme'], '全幅插画·居中标题')
+            self.assertEqual(design['levels'], ['title'])
+            self.assertEqual(design['overlay_defaults']['position'], 'center')
+
     def test_theme_field_takes_precedence_over_layout(self):
-        design = cover_themes.design_for({'theme': 'left-text-single-title', 'layout': '左文右图'})
+        design = cover_themes.design_for({'theme': 'full-bleed-single-title', 'layout': '左文右图'})
         self.assertEqual(design['levels'], ['title'])
         alias = cover_themes.design_for({'theme': '左文右图'})
         self.assertEqual(alias['theme'], '左文右图·暖色人物')

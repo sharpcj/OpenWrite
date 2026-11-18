@@ -103,7 +103,8 @@ def _cover_requirement(article: Path, request: dict) -> dict:
             raise ValueError('预设封面版式采用后期叠字，请将 text 置空并提供 overlay 标题')
         defaults = design['overlay_defaults']
         overlay = result.setdefault('overlay', {'title': state.get('title', '')})
-        if overlay.get('position') not in ('top-left', 'center-left', 'bottom-left'):
+        positions = design.get('positions') or ('top-left', 'center-left', 'bottom-left')
+        if overlay.get('position') not in positions:
             overlay['position'] = defaults.get('position', 'center-left')
         cap = defaults.get('text_width_ratio', 0.45)
         overlay['text_width_ratio'] = min(overlay.get('text_width_ratio', cap), cap)

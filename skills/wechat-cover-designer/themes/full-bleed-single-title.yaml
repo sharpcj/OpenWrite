@@ -1,0 +1,40 @@
+name: 全幅插画·居中标题
+description: 整幅暖色渐变场景 + 居中的单行大标题，插画铺满整个封面、文字水平居中，适合标题本身已足够有力的文章
+layout_aliases: [全幅单标题, full-bleed-single-title, left-text-single-title, 左文单标题]
+
+variables:
+  title-color: "#3D2C22"
+
+background:
+  type: gradient
+  rule: >-
+    smooth continuous warm gradient background across the whole image, soft tonal
+    transition, no hard split, no separate text panel, no abrupt color cut
+
+subject:
+  region: full
+  width_ratio: 1.0
+  scene: >-
+    ONE cohesive warm editorial illustration filling the entire cover (prefer a friendly person
+    at a desk editing video on a computer, with a few floating video clips / play buttons / UI cards
+    around them), with the main subject kept towards the outer areas of the canvas
+  fit: >-
+    FULL-BLEED wide scene covering the whole artwork, with a calm low-detail warm gradient band
+    through the horizontal middle so the centered headline stays clear and never sits on busy detail
+
+text:
+  region: full
+  width_ratio: 0.8
+  position: center
+  positions: [center, top-center, bottom-center]
+  scrim: false
+  levels: [title]
+  guidance: stays quiet and uncluttered for a single big bold title centered across the full width
+  title_height_ratio: 0.18
+  margin_ratio: 0.06
+
+acceptance:
+  - 平滑渐变背景无硬切
+  - 插画铺满整幅封面、构图完整，中部留出安静区域承载标题
+  - 单行大标题在整幅封面水平居中，不被主体遮挡、与背景对比清晰
+  - 底图不含任何文字

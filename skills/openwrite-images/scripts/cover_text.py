@@ -179,7 +179,8 @@ def render(base, output, overlay: dict, width: int, height: int):
     if image.size != (width, height):
         raise ValueError(f'叠字底图尺寸 {image.size} 与需求 {(width, height)} 不符')
 
-    vertical, _, horizontal = position.partition('-')
+    # 'center' 单独出现时同时表示垂直与水平居中。
+    vertical, horizontal = position.split('-') if '-' in position else (position, position)
     if vertical == 'bottom':
         block_top = height - layout['margin_y'] - layout['block_h']
     elif vertical == 'top':

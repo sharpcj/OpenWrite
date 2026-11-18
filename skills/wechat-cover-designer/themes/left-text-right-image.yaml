@@ -26,6 +26,7 @@ text:
   region: left
   width_ratio: 0.45
   position: center-left
+  positions: [top-left, center-left, bottom-left]
   scrim: false
   levels: [title, subtitle, tagline]
   guidance: >-

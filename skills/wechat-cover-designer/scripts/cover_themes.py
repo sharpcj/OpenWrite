@@ -63,6 +63,7 @@ def design_for(cover_style: dict) -> dict:
         'overlay_defaults': {},
         'text_defaults': {},
         'levels': None,
+        'positions': None,
     }
     theme = find_by_layout(layout)
     if theme is None:
@@ -90,6 +91,10 @@ def design_for(cover_style: dict) -> dict:
         'text_width_ratio': text.get('width_ratio', 0.45),
         'scrim': text.get('scrim', False),
     }
+    # 主题可声明允许的叠字方位（如居中式版式只允许水平居中相关方位）；
+    # 未声明时沿用左文版式的左侧方位，保持旧主题行为。
+    if text.get('positions'):
+        design['positions'] = list(text['positions'])
     design['text_defaults'] = {key: text[key] for key in
                                ('title_height_ratio', 'subtitle_height_ratio',
                                 'tagline_height_ratio', 'margin_ratio') if key in text}
