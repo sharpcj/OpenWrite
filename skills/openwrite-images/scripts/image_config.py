@@ -141,7 +141,9 @@ def cover_text_defaults() -> dict:
         'scrim': True,
         'margin_ratio': 0.06,
         'title_height_ratio': 0.18,
-        'subtitle_height_ratio': 0.10,
+        'subtitle_height_ratio': 0.08,
+        'tagline_height_ratio': 0.05,
+        'tagline_color': '#9b8f7f',
     }
     configured = skill_config().get('cover_text')
     if isinstance(configured, dict):

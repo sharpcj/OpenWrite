@@ -26,7 +26,7 @@ wechat:
   accounts:
     账号1:
       # 公众号名：由用户填写，便于识别这个账号对应哪个公众号。
-      name: ""
+      name:
       # 获取方式：https://mp.weixin.qq.com → 设置与开发 → 基本配置
       # 真实密钥只写在 openwrite.yaml，不要写入本模板或提交到仓库。
       app_id: ""
@@ -35,11 +35,12 @@ wechat:
       # 可选覆盖：该账号的写作视角与检查点开关（缺省沿用 defaults）。
       # writer_role: tech
       # outline_approval: true
-      # 微信封面图样式：三个维度独立配置，可使用中文或自定义描述。
-      # 版式示例：左文右图 / 居中标题 / 上文下图 / 自定义构图描述。
-      # 左文右图：整张统一背景，主体靠右，左侧留白叠加标题与关键词句，不与主体重叠。
+      # 微信封面样式：theme 选预设主题（cover-designer），visual_style/color_tone 可选覆盖。
+      # 主题示例：left-text-right-image（左文右图·三级文字）/ left-text-single-title（左文右图·仅大标题）。
+      # 用 cover_themes.py --list 查看全部主题；theme 也可填别名（如「左文右图」）。
+      # 自定义构图可改用 layout 描述（不套预设）；文字层次由主题 text.levels 定义。
       cover:
-        layout: 左文右图
+        theme: left-text-right-image
         # 视觉风格示例：温暖插画 / 科技线稿 / 写实摄影 / 极简抽象。
         visual_style: 温暖插画
         # 色调示例：暖黄奶油色 / 青绿渐变 / 蓝紫渐变 / 自定义品牌色及色值。

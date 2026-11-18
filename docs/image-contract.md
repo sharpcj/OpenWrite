@@ -15,7 +15,7 @@
 
 官方文档插图需要搜索与内容判断，由 Agent 找到并下载原图，把本地路径写入 `source_file`、原始链接写入 `source_url`，图片能力以 `file` 方式导入（默认优先级中 `file` 居首即体现官方插图优先）。图库搜索需要 `keywords`。未配置密钥的来源自动跳过，不静默计费。
 
-**微信封面为「底图 + 标题叠字」**：底图不渲染文字（`text` 置空），标题/副标题写入 `overlay`，由图片能力用 Pillow 精确排版叠加。`overlay.title` 必须是已确认的文章标题（控制器校验一致性），`subtitle` 可选。
+**微信封面为「底图 + 标题叠字」**：底图不渲染文字（`text` 置空），大标题/副标题/小标语写入 `overlay`，由图片能力用 Pillow 精确排版叠加。`overlay.title` 是封面大标题，**可短于文章标题**（用更短的营销标题，细节交给副标题/标语），不再强制与文章标题一致；`subtitle`、`tagline` 可选。
 
 ## 配图需求：image-requests.json
 
@@ -37,11 +37,11 @@
       "composition": "右侧用知识卡片与光线表达检索；左下留白给标题叠字",
       "text": [],
       "prompt": "用连接知识卡片的光线表达检索增强，主题明确，避免无关机器人，画面不出现任何文字",
-      "overlay": {"title": "让 AI 找对资料", "subtitle": "检索增强实战指南", "position": "bottom-left"},
+      "overlay": {"title": "让 AI 找对资料", "subtitle": "检索增强实战指南", "tagline": "说清想法，看着预览改", "position": "bottom-left"},
       "preferred_sources": ["comfyui", "fal", "hunyuan", "pexels", "pixabay", "unsplash"],
       "placement": "cover-only",
       "alt": "文章封面",
-      "acceptance": ["标题清晰可读且与确认标题一致", "主题与正文一致", "画面只保留一个焦点"]
+      "acceptance": ["大标题清晰可读", "主题与正文一致", "画面只保留一个焦点"]
     }
   ]
 }
@@ -70,7 +70,7 @@
 - `prompt`：图片内容与表达目的。可以是自然语言设计说明，不是后端调用参数。
 - `type`、`style`、`palette`、`composition`：画面类型、风格、配色及构图思路。
 - `text`：画面需要出现的原文列表；无文字时用空列表。微信封面使用 `overlay` 叠字时 `text` 必须为空，避免文字重复。
-- `overlay`：仅封面可用的叠字对象。`title` 必填且等于已确认标题；`subtitle` 可选；`position`（`bottom-left` 等八个方位）、`color`、`font`、`font_size`、`subtitle_size`、`scrim` 可覆盖默认版式。与 `card` 互斥。
+- `overlay`：仅封面可用的叠字对象。`title` 必填（封面大标题，可短于文章标题）；`subtitle`（中副题）、`tagline`（小标语，弱化灰色小字）可选。**实际渲染哪些层次由封面主题的 `text.levels` 决定**，主题未声明的层次会被裁剪。`position`（`bottom-left` 等八个方位）、`color`、`tagline_color`、`font`、`font_size`、`subtitle_size`、`tagline_size`、`scrim` 可覆盖默认版式。与 `card` 互斥。
 - `preferred_sources`：可选，来源偏好顺序（`comfyui` / `file` / `fal` / `hunyuan` / `pexels` / `pixabay` / `unsplash` / `html` / `gemini` / `dalle`），不重复；缺省按场景默认优先级。
 - `source_file`：可选，已有图片的本地路径（官方文档插图、宿主生图输出、用户图片），供 `file` 来源导入。宿主生图底图等中间图像文件应保存在 `process/`；被需求 `output` 或正文引用的成品图留根目录。
 - `source_url`、`attribution`：可选，图片原始出处链接与署名/版权信息，随结果保留以便溯源。

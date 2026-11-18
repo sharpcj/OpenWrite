@@ -33,7 +33,7 @@ PERSPECTIVE_LABELS = {'blogger': '自媒体博主', 'tech': '技术作者', 'pro
 TEMPLATE_NAME = 'openwrite.example.yaml'
 CONFIG_NAME = 'openwrite.yaml'
 DEFAULT_WRITER_ROLE = 'blogger'
-COVER_DIMENSIONS = ('layout', 'visual_style', 'color_tone')
+COVER_DIMENSIONS = ('theme', 'layout', 'visual_style', 'color_tone')
 # Account fields per platform; unknown fields are rejected instead of ignored.
 ACCOUNT_FIELDS = {
     'wechat': {'name', 'app_id', 'app_secret', 'author', 'writer_role', 'outline_approval', 'cover'},
@@ -80,7 +80,7 @@ def _boolean(value, where: str) -> bool:
 
 def validate_cover_style(value: dict) -> dict:
     if not isinstance(value, dict) or set(value) - set(COVER_DIMENSIONS):
-        raise ValueError('封面样式仅包含 layout、visual_style、color_tone 三个维度')
+        raise ValueError('封面样式仅包含 theme、layout、visual_style、color_tone')
     normalized = {}
     for key, text in value.items():
         if not isinstance(text, str) or not text.strip() or len(text) > 300 or '\n' in text or '\r' in text:
@@ -224,11 +224,15 @@ def outline_approval(root: Path, platform=None, account=None) -> bool:
     return (config.get('defaults') or {}).get('outline_approval', True)
 
 
-def cover_style(root: Path, layout=None, visual_style=None, color_tone=None, account=None) -> dict:
-    """Account cover defaults merged with explicit per-task dimensions."""
+def cover_style(root: Path, layout=None, visual_style=None, color_tone=None, account=None, theme=None) -> dict:
+    """Account cover defaults merged with explicit per-task dimensions.
+
+    `theme` selects a cover-designer preset (name or alias); `layout` remains for
+    custom layouts / backward compatibility. visual_style/color_tone override.
+    """
     name = choose_account(root, 'wechat', account)
     configured = ((_accounts(root, 'wechat').get(name) or {}).get('cover') or {}) if name else {}
-    supplied = dict(layout=layout, visual_style=visual_style, color_tone=color_tone)
+    supplied = dict(theme=theme, layout=layout, visual_style=visual_style, color_tone=color_tone)
     chosen = {dimension: supplied[dimension] if supplied[dimension] is not None
               else configured.get(dimension) for dimension in COVER_DIMENSIONS}
     return validate_cover_style({key: value for key, value in chosen.items() if value})

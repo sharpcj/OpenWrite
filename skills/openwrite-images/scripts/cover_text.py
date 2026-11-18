@@ -18,6 +18,7 @@ POSITIONS = ('bottom-left', 'bottom-center', 'bottom-right',
              'center-left', 'center')
 MIN_TITLE_PX = 18
 MIN_SUBTITLE_PX = 12
+MIN_TAGLINE_PX = 12
 
 
 def _load_sibling(name: str):
@@ -89,43 +90,58 @@ def wrap_text(text: str, font, max_width: int) -> list:
 
 
 def _layout(overlay: dict, width: int, height: int):
-    """Resolve fonts, wrapped lines and the text block box; shrink to fit."""
+    """Resolve fonts, wrapped lines and the text block box; shrink to fit.
+
+    Three levels: big title, medium subtitle, small muted tagline.
+    """
     from PIL import ImageFont
     defaults = image_config.cover_text_defaults()
-    margin = max(8, int(min(width, height) * float(defaults['margin_ratio'])))
+    # 水平边距按宽度、垂直边距按高度，宽幅封面左侧文字也能与边缘保持留白。
+    margin = max(8, int(width * float(defaults['margin_ratio'])))
+    margin_y = max(8, int(height * float(defaults['margin_ratio'])))
     ratio = overlay.get('text_width_ratio')
     if ratio is not None and (type(ratio) not in (int, float) or not 0.1 <= ratio <= 0.9):
         raise ValueError('text_width_ratio 必须为 0.1–0.9 的数字')
     max_width = width - 2 * margin
     if ratio is not None:
         max_width = min(max_width, int(width * ratio))
-    available = height - 2 * margin
+    available = height - 2 * margin_y
     title = overlay['title']
     subtitle = overlay.get('subtitle') or ''
+    tagline = overlay.get('tagline') or ''
     base = overlay.get('font_size') or max(MIN_TITLE_PX, int(height * defaults['title_height_ratio']))
     sub_base = overlay.get('subtitle_size') or max(MIN_SUBTITLE_PX, int(height * defaults['subtitle_height_ratio']))
+    tag_base = overlay.get('tagline_size') or max(MIN_TAGLINE_PX, int(height * defaults['tagline_height_ratio']))
     font_path = str(resolve_font(overlay).path)
-    size, sub_size = int(base), int(sub_base)
+    size, sub_size, tag_size = int(base), int(sub_base), int(tag_base)
     while True:
         title_font = ImageFont.truetype(font_path, size)
         sub_font = ImageFont.truetype(font_path, sub_size) if subtitle else None
+        tag_font = ImageFont.truetype(font_path, tag_size) if tagline else None
         title_lines = wrap_text(title, title_font, max_width)
         sub_lines = wrap_text(subtitle, sub_font, max_width) if subtitle else []
+        tag_lines = wrap_text(tagline, tag_font, max_width) if tagline else []
         title_lh = int(size * 1.25)
         sub_lh = int(sub_size * 1.4)
+        tag_lh = int(tag_size * 1.5)
         gap = int(size * 0.35) if sub_lines else 0
-        block_h = len(title_lines) * title_lh + gap + len(sub_lines) * sub_lh
+        gap2 = int((sub_size if sub_lines else size) * 0.6) if tag_lines else 0
+        block_h = (len(title_lines) * title_lh + gap + len(sub_lines) * sub_lh
+                   + gap2 + len(tag_lines) * tag_lh)
         widest = max([title_font.getlength(line) for line in title_lines]
-                     + [sub_font.getlength(line) for line in sub_lines] or [0])
-        if (block_h <= available and widest <= max_width) or (size <= MIN_TITLE_PX and sub_size <= MIN_SUBTITLE_PX):
+                     + [sub_font.getlength(line) for line in sub_lines]
+                     + [tag_font.getlength(line) for line in tag_lines] or [0])
+        if (block_h <= available and widest <= max_width) or (
+                size <= MIN_TITLE_PX and sub_size <= MIN_SUBTITLE_PX and tag_size <= MIN_TAGLINE_PX):
             if block_h > available or widest > max_width:
                 raise ValueError(f'封面文案过长，缩至最小字号仍放不下（{len(title)} 字标题）；请缩短标题或副标题')
-            return {'margin': margin, 'title_font': title_font, 'sub_font': sub_font,
-                    'title_lines': title_lines, 'sub_lines': sub_lines,
-                    'title_lh': title_lh, 'sub_lh': sub_lh, 'gap': gap,
-                    'block_h': block_h, 'size': size}
+            return {'margin': margin, 'margin_y': margin_y, 'title_font': title_font, 'sub_font': sub_font,
+                    'tag_font': tag_font, 'title_lines': title_lines, 'sub_lines': sub_lines,
+                    'tag_lines': tag_lines, 'title_lh': title_lh, 'sub_lh': sub_lh,
+                    'tag_lh': tag_lh, 'gap': gap, 'gap2': gap2, 'block_h': block_h, 'size': size}
         size = max(MIN_TITLE_PX, size - 2)
         sub_size = max(MIN_SUBTITLE_PX, sub_size - 2)
+        tag_size = max(MIN_TAGLINE_PX, tag_size - 2)
 
 
 def _scrim(draw_layer, width: int, height: int, box: tuple, position: str):
@@ -165,9 +181,9 @@ def render(base, output, overlay: dict, width: int, height: int):
 
     vertical, _, horizontal = position.partition('-')
     if vertical == 'bottom':
-        block_top = height - margin - layout['block_h']
+        block_top = height - layout['margin_y'] - layout['block_h']
     elif vertical == 'top':
-        block_top = margin
+        block_top = layout['margin_y']
     else:
         block_top = (height - layout['block_h']) // 2
 
@@ -180,9 +196,11 @@ def render(base, output, overlay: dict, width: int, height: int):
         return margin
 
     widest = max([layout['title_font'].getlength(line) for line in layout['title_lines']]
-                 + [layout['sub_font'].getlength(line) for line in layout['sub_lines']] or [0])
+                 + [layout['sub_font'].getlength(line) for line in layout['sub_lines']]
+                 + [layout['tag_font'].getlength(line) for line in layout['tag_lines']] or [0])
     block_left = margin if horizontal == 'left' else (width - widest) / 2 if horizontal == 'center' else width - margin - widest
-    if overlay.get('scrim', image_config.cover_text_defaults()['scrim']):
+    use_scrim = overlay.get('scrim', image_config.cover_text_defaults()['scrim'])
+    if use_scrim:
         layer = Image.new('RGBA', image.size, (0, 0, 0, 0))
         _scrim(layer, width, height,
                (block_left, block_top, block_left + widest, block_top + layout['block_h']),
@@ -194,7 +212,9 @@ def render(base, output, overlay: dict, width: int, height: int):
     stroke = max(1, layout['size'] // 32)
     for line in layout['title_lines']:
         x = line_x(line, layout['title_font'])
-        draw.text((x + 2, y + 2), line, font=layout['title_font'], fill=(8, 10, 16, 170))
+        # 偏移阴影只在深色遮罩（白字）下增加层次；浅色底深色字不加，避免重影。
+        if use_scrim:
+            draw.text((x + 2, y + 2), line, font=layout['title_font'], fill=(8, 10, 16, 170))
         draw.text((x, y), line, font=layout['title_font'], fill=color,
                   stroke_width=stroke, stroke_fill=color)
         y += layout['title_lh']
@@ -202,9 +222,17 @@ def render(base, output, overlay: dict, width: int, height: int):
         y += layout['gap']
         for line in layout['sub_lines']:
             x = line_x(line, layout['sub_font'])
-            draw.text((x + 1, y + 1), line, font=layout['sub_font'], fill=(8, 10, 16, 150))
+            if use_scrim:
+                draw.text((x + 1, y + 1), line, font=layout['sub_font'], fill=(8, 10, 16, 150))
             draw.text((x, y), line, font=layout['sub_font'], fill=color)
             y += layout['sub_lh']
+    if layout['tag_lines']:
+        y += layout['gap2']
+        tag_color = overlay.get('tagline_color') or image_config.cover_text_defaults()['tagline_color']
+        for line in layout['tag_lines']:
+            x = line_x(line, layout['tag_font'])
+            draw.text((x, y), line, font=layout['tag_font'], fill=tag_color)
+            y += layout['tag_lh']
     image.convert('RGB').save(output, format='PNG')
     return output
 

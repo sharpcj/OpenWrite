@@ -1,0 +1,43 @@
+name: 左文右图·暖色人物
+description: 平滑暖色渐变背景 + 右侧紧凑人物剪辑场景 + 左侧三级文字，参考暖色编辑插画风格
+layout_aliases: [左文右图, left-text-right-image]
+
+variables:
+  title-color: "#3D2C22"
+  tagline-color: "#9b8f7f"
+
+background:
+  type: gradient
+  rule: >-
+    smooth continuous warm gradient background across the whole image, soft tonal
+    transition from left to right, no hard split, no separate text panel, no abrupt color cut
+
+subject:
+  region: right
+  width_ratio: 0.5
+  scene: >-
+    ONE cohesive warm editorial illustration scene (prefer a friendly person at a desk
+    editing video on a computer, with a few floating video clips / play buttons / UI cards around)
+  fit: >-
+    COMPACT vignette, vertically centered with generous empty gradient space above and below,
+    never touching or filling the top/bottom edges
+
+text:
+  region: left
+  width_ratio: 0.45
+  position: center-left
+  scrim: false
+  levels: [title, subtitle, tagline]
+  guidance: >-
+    stays quiet and uncluttered for three-level text (big bold title, medium subtitle,
+    small muted tagline)
+  title_height_ratio: 0.18
+  subtitle_height_ratio: 0.08
+  tagline_height_ratio: 0.05
+  margin_ratio: 0.06
+
+acceptance:
+  - 平滑渐变背景无硬切
+  - 右侧人物场景紧凑、上下留白、不填满边缘
+  - 左侧三级文字清晰、与边缘留白舒适、不压主体
+  - 底图不含任何文字

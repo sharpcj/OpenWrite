@@ -43,6 +43,18 @@ class CoverStyleTests(unittest.TestCase):
         self.assertEqual(custom, dict(STYLE, visual_style='自定义纸雕质感', color_tone='品牌色 #12AABB'))
         self.assertEqual(self.config.read_bytes(), before)
 
+    def test_theme_field_selects_preset_and_cli_override(self):
+        self.config.write_text('wechat:\n  accounts:\n    主号:\n      cover:\n'
+                               '        theme: left-text-single-title\n'
+                               '        color_tone: 暖黄奶油色\n', encoding='utf-8')
+        style = preferences.cover_style(self.root)
+        self.assertEqual(style['theme'], 'left-text-single-title')
+        self.assertEqual(style['color_tone'], '暖黄奶油色')
+        result = self.cli('new', 'single', '--cover-theme', 'left-text-right-image')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = workflow.load(self.root / 'articles/single')
+        self.assertEqual(state['cover_style']['theme'], 'left-text-right-image')
+
     def test_new_and_init_persist_snapshot_and_prompt_overrides_only_one_dimension(self):
         result = self.cli('new', 'topic', '--cover-visual-style', '科技线稿')
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -113,7 +125,8 @@ class CoverStyleTests(unittest.TestCase):
         resolved = runtime.load_request(article, 'cover')
         self.assertEqual(resolved['style'], STYLE['visual_style'])
         self.assertEqual(resolved['palette'], [STYLE['color_tone']])
-        self.assertIn('right 45%', resolved['composition'])
+        self.assertIn('smooth continuous warm gradient', resolved['composition'])
+        self.assertIn('right ~50%', resolved['composition'])
         self.assertEqual(resolved['overlay']['position'], 'center-left')
         self.assertEqual(resolved['overlay']['text_width_ratio'], 0.45)
         try:
@@ -130,6 +143,28 @@ class CoverStyleTests(unittest.TestCase):
                                                    image.crop((600, 0, 1024, 432))).getbbox())
             self.assertIsNotNone(ImageChops.difference(picture.crop((0, 0, 550, 432)),
                                                       image.crop((0, 0, 550, 432))).getbbox())
+
+    def test_three_level_text_hierarchy(self):
+        runtime = workflow.image_runtime()
+        try:
+            cover_text = runtime.load_module('cover_text_levels', 'cover_text.py')
+            cover_text.resolve_font({})
+        except ValueError:
+            self.skipTest('本机缺少可用中文字体')
+        overlay = {'title': 'AI 杀不死剪映', 'subtitle': '一年赚走近百亿',
+                   'tagline': '真正危险的是别人', 'color': '#3D2C22',
+                   'position': 'center-left', 'scrim': False}
+        layout_box = cover_text._layout(overlay, 1024, 432)
+        self.assertTrue(layout_box['tag_lines'])
+        self.assertLess(layout_box['tag_font'].size, layout_box['sub_font'].size)
+        self.assertLess(layout_box['sub_font'].size, layout_box['title_font'].size)
+        base = self.root / 'levels-base.png'
+        Image.new('RGB', (1024, 432), '#FFF3D2').save(base)
+        out = self.root / 'levels-out.png'
+        cover_text.render(base, out, overlay, 1024, 432)
+        with Image.open(out) as picture:
+            self.assertEqual(picture.size, (1024, 432))
+            self.assertIsNotNone(ImageChops.difference(picture, Image.open(base)).getbbox())
 
     def test_legacy_request_fingerprint_is_unchanged_without_style_snapshot(self):
         article = self.root / 'old'

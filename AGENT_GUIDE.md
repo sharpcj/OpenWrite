@@ -33,6 +33,7 @@ OpenWrite 支持微信公众号与小红书图文创作，Skill 位于项目 `sk
 | 微信 `product` | [wechat-product-manager-writer](skills/wechat-product-manager-writer/SKILL.md) |
 | 小红书图文 | [rednote-note-writer](skills/rednote-note-writer/SKILL.md) |
 | 生成、替换或导入图片，含卡片渲染 | [openwrite-images](skills/openwrite-images/SKILL.md) |
+| 微信第四步封面版式与设计预设 | [wechat-cover-designer](skills/wechat-cover-designer/SKILL.md) |
 | 微信第七步排版 | [wechat-article-formatter](skills/wechat-article-formatter/SKILL.md) |
 | 上传微信草稿 | [wechat-draft-publisher](skills/wechat-draft-publisher/SKILL.md) |
 | 发布小红书笔记 | [rednote-publisher](skills/rednote-publisher/SKILL.md) |

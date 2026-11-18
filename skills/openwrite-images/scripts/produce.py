@@ -36,6 +36,15 @@ def load_module(name: str, filename: str):
 
 image_config = load_module('openwrite_image_config', 'image_config.py')
 
+
+def _cover_themes():
+    """Load the cover-designer skill's theme resolver (design presets live there)."""
+    path = PROJECT_ROOT / 'skills/wechat-cover-designer/scripts/cover_themes.py'
+    spec = importlib.util.spec_from_file_location('openwrite_cover_themes', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 OVERLAY_POSITIONS = ('bottom-left', 'bottom-center', 'bottom-right',
                      'top-left', 'top-center', 'top-right',
                      'center-left', 'center')
@@ -50,15 +59,15 @@ def _validate_overlay(item: dict) -> None:
     if 'card' in item:
         raise ValueError('overlay 与 card 不能同时使用；卡片文字由 html 后端排版')
     if not isinstance(overlay.get('title'), str) or not overlay['title'].strip():
-        raise ValueError('overlay 需有非空 title（微信封面使用已确认的文章标题）')
+        raise ValueError('overlay 需有非空 title（封面大标题，可短于文章标题）')
     if item.get('text'):
         raise ValueError('配置 overlay 叠字时底图不应再渲染画面文字；请把 text 置空，避免文字重复')
-    for key in ('subtitle', 'color', 'font'):
+    for key in ('subtitle', 'tagline', 'color', 'tagline_color', 'font'):
         if key in overlay and not isinstance(overlay[key], str):
             raise ValueError(f'overlay.{key} 必须是字符串')
     if 'position' in overlay and overlay['position'] not in OVERLAY_POSITIONS:
         raise ValueError(f'overlay.position 只能为 {", ".join(OVERLAY_POSITIONS)}')
-    for key in ('font_size', 'subtitle_size'):
+    for key in ('font_size', 'subtitle_size', 'tagline_size'):
         if key in overlay and (type(overlay[key]) is not int or not 8 <= overlay[key] <= 512):
             raise ValueError(f'overlay.{key} 必须为 8–512 的整数')
     if 'text_width_ratio' in overlay and (type(overlay['text_width_ratio']) not in (int, float)
@@ -77,31 +86,36 @@ def _cover_requirement(article: Path, request: dict) -> dict:
     if state.get('platform', 'wechat') != 'wechat' or not state.get('cover_style'):
         return request
     style = state['cover_style']
-    if (not isinstance(style, dict) or set(style) - {'layout', 'visual_style', 'color_tone'}
+    if (not isinstance(style, dict) or set(style) - {'theme', 'layout', 'visual_style', 'color_tone'}
             or not all(isinstance(v, str) and v.strip() for v in style.values())):
         raise ValueError('任务 cover_style 格式不正确')
     import copy
     result = copy.deepcopy(request)
     result['cover_style'] = dict(style)
-    if style.get('visual_style'):
-        result['style'] = style['visual_style']
-    if style.get('color_tone'):
-        result['palette'] = [style['color_tone']]
-    if style.get('layout'):
-        cover_layout = style['layout']
-        instructions = cover_layout
-        if cover_layout in ('左文右图', 'left-text-right-image'):
-            instructions += ('; one continuous unified background across the full image, '
-                             'main subject confined to the right 45%, keep the left 50% quiet and uncluttered '
-                             'for text, no hard split or separate text panel, no text rendered in the base image')
-            if result.get('text'):
-                raise ValueError('左文右图封面采用后期叠字，请将 text 置空并提供 overlay 标题')
-            overlay = result.setdefault('overlay', {'title': state.get('title', '')})
-            if overlay.get('position') not in ('top-left', 'center-left', 'bottom-left'):
-                overlay['position'] = 'center-left'
-            overlay['text_width_ratio'] = min(overlay.get('text_width_ratio', 0.45), 0.45)
-            overlay.setdefault('scrim', False)
-        result['composition'] = '\n'.join(v for v in (result.get('composition', ''), instructions) if v)
+    design = _cover_themes().design_for(style)
+    if design.get('style'):
+        result['style'] = design['style']
+    if design.get('palette'):
+        result['palette'] = design['palette']
+    if design.get('theme') is not None:
+        # 预设版式：底图不渲染文字，叠字几何由主题约束。
+        if result.get('text'):
+            raise ValueError('预设封面版式采用后期叠字，请将 text 置空并提供 overlay 标题')
+        defaults = design['overlay_defaults']
+        overlay = result.setdefault('overlay', {'title': state.get('title', '')})
+        if overlay.get('position') not in ('top-left', 'center-left', 'bottom-left'):
+            overlay['position'] = defaults.get('position', 'center-left')
+        cap = defaults.get('text_width_ratio', 0.45)
+        overlay['text_width_ratio'] = min(overlay.get('text_width_ratio', cap), cap)
+        overlay.setdefault('scrim', defaults.get('scrim', False))
+        # 文字层次由主题定义：未声明的层次不渲染（如仅大标题的主题）。
+        levels = design.get('levels') or ['title']
+        for level in ('subtitle', 'tagline'):
+            if level not in levels:
+                overlay.pop(level, None)
+    if design.get('instructions'):
+        result['composition'] = '\n'.join(
+            v for v in (result.get('composition', ''), design['instructions']) if v)
     if result.get('overlay'):
         _validate_overlay(result)
     return result

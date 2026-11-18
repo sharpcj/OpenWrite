@@ -1,0 +1,38 @@
+name: 左文右图·单标题
+description: 平滑暖色渐变 + 右侧紧凑人物场景 + 左侧仅一个大标题，适合标题本身已足够有力的文章
+layout_aliases: [左文单标题, left-text-single-title]
+
+variables:
+  title-color: "#3D2C22"
+
+background:
+  type: gradient
+  rule: >-
+    smooth continuous warm gradient background across the whole image, soft tonal
+    transition from left to right, no hard split, no separate text panel, no abrupt color cut
+
+subject:
+  region: right
+  width_ratio: 0.5
+  scene: >-
+    ONE cohesive warm editorial illustration scene (prefer a friendly person at a desk
+    editing video on a computer, with a few floating video clips / play buttons / UI cards around)
+  fit: >-
+    COMPACT vignette, vertically centered with generous empty gradient space above and below,
+    never touching or filling the top/bottom edges
+
+text:
+  region: left
+  width_ratio: 0.45
+  position: center-left
+  scrim: false
+  levels: [title]
+  guidance: stays quiet and uncluttered for a single big bold title
+  title_height_ratio: 0.18
+  margin_ratio: 0.06
+
+acceptance:
+  - 平滑渐变背景无硬切
+  - 右侧人物场景紧凑、上下留白、不填满边缘
+  - 左侧仅一个大标题，清晰、与边缘留白舒适、不压主体
+  - 底图不含任何文字

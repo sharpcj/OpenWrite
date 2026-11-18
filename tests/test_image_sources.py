@@ -414,24 +414,38 @@ class CoverOverlayTests(unittest.TestCase):
             runtime.produce(self.args())
         self.assertFalse((self.article / 'cover.png').exists())
 
-    def test_workflow_requires_confirmed_title_in_overlay(self):
+    def test_cover_title_independent_of_article_title(self):
         import workflow
         seed_body(self.article)
+        # 封面大标题可短于文章标题（营销标题），不再强制一致。
         request = {'id': 'cover', 'role': 'cover', 'output': 'cover.png',
                    'width': 200, 'height': 100, 'prompt': '底图', 'text': [],
-                   'overlay': {'title': '别的标题'}}
+                   'overlay': {'title': '别的标题', 'subtitle': '信息副题', 'tagline': '弱化小标语'}}
         (layout.path(self.article, 'image-requests.json')).write_text(
             json.dumps({'version': 1, 'images': [request]}, ensure_ascii=False), encoding='utf-8')
         runtime.produce(self.args())
-        with self.assertRaises(ValueError) as caught:
-            workflow.complete(self.article, 'cover', reviewed=True, note='已检查')
-        self.assertIn('overlay.title', str(caught.exception))
-        request['overlay']['title'] = '测试文章'
-        (layout.path(self.article, 'image-requests.json')).write_text(
-            json.dumps({'version': 1, 'images': [request]}, ensure_ascii=False), encoding='utf-8')
-        runtime.produce(self.args(overwrite=True))
         state = workflow.complete(self.article, 'cover', reviewed=True, note='已检查封面叠字')
         self.assertEqual(state['completed'][-1]['step'], 'cover')
+
+
+    def test_text_levels_are_theme_defined(self):
+        import workflow
+        # 仅大标题主题：即使提供副标题/标语，也只保留大标题。
+        workflow.initialize(self.article, '测试文章',
+                            cover_style={'layout': '左文单标题', 'visual_style': '温暖插画',
+                                         'color_tone': '暖黄奶油色'})
+        self.write_plan({'title': '大标题', 'subtitle': '副标题', 'tagline': '小标语'})
+        resolved = runtime.load_request(self.article, 'cover')
+        self.assertEqual(resolved['overlay']['title'], '大标题')
+        self.assertNotIn('subtitle', resolved['overlay'])
+        self.assertNotIn('tagline', resolved['overlay'])
+        # 三级主题：保留副标题与标语。
+        state = workflow.load(self.article)
+        state['cover_style']['layout'] = '左文右图'
+        workflow.write_json(layout.path(self.article, 'workflow.json'), state)
+        resolved = runtime.load_request(self.article, 'cover')
+        self.assertEqual(resolved['overlay']['subtitle'], '副标题')
+        self.assertEqual(resolved['overlay']['tagline'], '小标语')
 
 
 if __name__ == '__main__':

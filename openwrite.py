@@ -23,7 +23,7 @@ SKILLS = ROOT / 'skills'
 
 def _registered_skills() -> tuple:
     """Neutral capabilities plus each implemented platform's existing skills."""
-    names = ['openwrite-images']
+    names = ['openwrite-images', 'wechat-cover-designer']
     for profile in platforms.REGISTRY.values():
         if not profile['implemented']:
             continue
@@ -102,17 +102,20 @@ def autostart_board() -> None:
 
 
 def task_cover_style(args: argparse.Namespace, selection: dict) -> dict:
-    fields = ('cover_layout', 'cover_visual_style', 'cover_color_tone')
+    fields = ('cover_layout', 'cover_visual_style', 'cover_color_tone', 'cover_theme')
     supplied = [getattr(args, name, None) for name in fields]
     if selection['platform'] != platforms.WECHAT:
         if any(value is not None for value in supplied):
-            raise ValueError('封面样式三个配置维度目前仅用于微信封面')
+            raise ValueError('封面样式配置目前仅用于微信封面')
         return {}
-    return preferences.cover_style(ROOT, *supplied, account=selection.get('account'))
+    layout, visual_style, color_tone, theme = supplied
+    return preferences.cover_style(ROOT, layout, visual_style, color_tone,
+                                   account=selection.get('account'), theme=theme)
 
 
 def add_cover_arguments(command):
-    command.add_argument('--cover-layout', help='本次微信封面版式，覆盖账号配置 cover.layout')
+    command.add_argument('--cover-theme', help='本次微信封面主题（cover-designer 预设名或别名），覆盖账号配置 cover.theme')
+    command.add_argument('--cover-layout', help='本次微信封面版式（自定义构图），覆盖账号配置 cover.layout')
     command.add_argument('--cover-visual-style', help='本次封面视觉风格，覆盖账号配置 cover.visual_style')
     command.add_argument('--cover-color-tone', help='本次封面色调，覆盖账号配置 cover.color_tone')
 
