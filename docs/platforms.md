@@ -83,10 +83,10 @@ OpenWrite 的流程秩序是平台中立的，产物形态按平台分派。本�
 单文件渲染平台的函数签名约定：
 
 ```python
-def render_<platform>(directory: Path, state: dict, args: argparse.Namespace, staged: Path) -> int
+def render_<platform>(directory: Path, state: dict, args: argparse.Namespace, staged: Path, theme: str) -> int
 ```
 
-在 `staged` 暂存目录产出结果，返回非零表示失败；入口负责可发布性检查、写入正式产物与完成第七步。失败时保留上一次成功的产物。
+在 `staged` 暂存目录产出结果，返回非零表示失败；入口负责可发布性检查、写入正式产物与完成第七步。失败时保留上一次成功的产物。`theme` 由入口解析（显式 `--theme` > 任务快照 > `default`）后传入，渲染函数不自行读取配置。
 
 **组图平台不走这条路径**：`rendered_artifact: null` 时，第七步调用 `assemble_card_set()`，只做组装与校验；`check_publishable()` 分派到 `check_card_set()`，逐张校验尺寸/格式/顺序并核对笔记文案。卡片渲染发生在第 4/5 步，由 `html` 后端完成，并在渲染期做真实 DOM 版式校验（溢出、字号下限、安全区）。
 

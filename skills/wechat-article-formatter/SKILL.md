@@ -68,6 +68,8 @@ python3 openwrite.py format articles/my-topic --theme blueprint-tech --no-prefor
 
 只换主题时使用 `--no-preformat`，保留正文原有引号和中英文间距，不修改草稿、封面或配图。已完成任务可直接重新 `format`，沿用当前架构替换 `article.html` 和第七步记录、更新 `workflow/publish-manifest.json`；不创建独立版本旁路，不自动上传。发布仍需用户重新确认。
 
+账号可在 `openwrite.yaml` 的 `wechat.accounts.<账号名>.format_theme` 配置默认主题，创建任务时快照；`format` 缺省使用快照主题，`--theme` 显式覆盖并在成功后回写快照。没有快照的旧任务仍用 `default`。
+
 ### 步骤3：执行转换
 
 ```bash

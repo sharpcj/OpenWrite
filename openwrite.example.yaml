@@ -35,6 +35,9 @@ wechat:
       # 可选覆盖：该账号的写作视角与检查点开关（缺省沿用 defaults）。
       # writer_role: tech
       # outline_approval: true
+      # 排版主题（第七步 format）：default / grace / modern / simple / blueprint-tech 或自定义 YAML 主题名。
+      # 创建任务时快照；format 缺省用快照，--theme 显式覆盖并在成功后回写。不配置时用 default。
+      # format_theme: grace
       # 微信封面样式：style 选预设样式（cover-designer），visual_style/color_tone 可选覆盖。
       # 样式示例：left-text-right-image（暖色三级）/ full-bleed-single-title（全幅居中）/ tech-glow（旧科技发光）。
       # 用 cover_styles.py --list 查看全部样式；style 也可填别名（如「左文右图」）。

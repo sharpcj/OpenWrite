@@ -54,6 +54,7 @@ def new_article(args: argparse.Namespace) -> int:
                                     getattr(args, 'perspective', None) or getattr(args, 'type', None),
                                     getattr(args, 'account', None))
     cover = task_cover_style(args, selection)
+    format_theme = task_format_theme(args, selection)
     directory = ROOT / 'articles' / args.name
     directory.mkdir(parents=True, exist_ok=False)
     perspective = preferences.PERSPECTIVE_LABELS[selection['perspective']]
@@ -72,12 +73,15 @@ def new_article(args: argparse.Namespace) -> int:
     (layout.path(directory, 'analysis.md')).write_text('# 资料分析\n', encoding='utf-8')
     workflow.write_json(layout.path(directory, 'sources.json'), {'version': 1, 'sources': []})
     workflow.initialize(directory, title, selection['perspective'], selection['platform'],
-                        selection['selection_source'], checkpoint, cover, selection.get('account'))
+                        selection['selection_source'], checkpoint, cover, selection.get('account'),
+                        format_theme=format_theme or None)
     print(f'已创建文章工作区：{directory}')
     print(f'本次任务：{platform_label} / {perspective}'
           + (f' / 账号 {selection["account"]}' if selection.get('account') else ''))
     if cover:
         print('封面样式：' + json.dumps(cover, ensure_ascii=False))
+    if format_theme:
+        print(f'排版主题：{format_theme}')
     print(f'标题与大纲检查点：{"开启，写正文前需用户确认" if checkpoint else "已授权跳过"}')
     profile = platforms.spec(selection['platform'])
     if not profile['implemented']:
@@ -113,6 +117,15 @@ def task_cover_style(args: argparse.Namespace, selection: dict) -> dict:
                                    account=selection.get('account'), style=style)
 
 
+def task_format_theme(args: argparse.Namespace, selection: dict) -> str:
+    theme = getattr(args, 'format_theme', None)
+    if selection['platform'] != platforms.WECHAT:
+        if theme is not None:
+            raise ValueError('排版主题配置目前仅用于微信文章')
+        return ''
+    return preferences.format_theme(ROOT, account=selection.get('account'), theme=theme)
+
+
 def add_cover_arguments(command):
     command.add_argument('--cover-style', help='本次微信封面样式（cover-designer 预设名或别名），覆盖账号配置 cover.style')
     command.add_argument('--cover-layout', help='本次微信封面版式（自定义构图），覆盖账号配置 cover.layout')
@@ -134,14 +147,14 @@ def article_directory(value: str) -> Path:
     return directory
 
 
-def render_wechat(directory: Path, state: dict, args: argparse.Namespace, staged: Path) -> int:
+def render_wechat(directory: Path, state: dict, args: argparse.Namespace, staged: Path, theme: str) -> int:
     """WeChat adapter: Markdown -> inline-style HTML -> WeChat code blocks."""
     profile = platforms.for_state(state)
     markdown = directory / profile['markdown_artifact']
     extra = ['--no-preformat'] if args.no_preformat else []
     result = run_skill(
         profile['renderer'], 'scripts/markdown_to_html.py',
-        '--input', str(markdown), '--output', str(staged), '--theme', args.theme, *extra,
+        '--input', str(markdown), '--output', str(staged), '--theme', theme, *extra,
     )
     if result:
         return result
@@ -161,6 +174,8 @@ def format_article(args: argparse.Namespace) -> int:
     render = RENDERERS.get(preferences.task_platform(state))
     if render is None:
         raise ValueError(f'{profile["label"]}排版适配器尚未实现，无法生成可发布产物')
+    # 显式 --theme > 任务快照（创建时来自账号 format_theme）> 内置 default。
+    theme = args.theme if args.theme is not None else (state.get('format_theme') or 'default')
     markdown = directory / profile['markdown_artifact']
     output = directory / profile['rendered_artifact']
     if not markdown.is_file():
@@ -169,14 +184,14 @@ def format_article(args: argparse.Namespace) -> int:
     import tempfile
     with tempfile.TemporaryDirectory(prefix='openwrite-format-') as tmp:
         staged = Path(tmp) / output.name
-        result = render(directory, state, args, staged)
+        result = render(directory, state, args, staged, theme)
         if result:
             return result
         checks = workflow.check_publishable(directory, state, staged)
         output.write_text(staged.read_text(encoding='utf-8'), encoding='utf-8')
-    workflow.complete_format(directory, args.theme, not args.no_preformat, checks)
+    workflow.complete_format(directory, theme, not args.no_preformat, checks)
     print(f'已完成排版并保存可发布产物：{output}')
-    print(f'发布清单：{layout.existing(directory, "publish-manifest.json")}（标题：{state["title"]}；主题：{args.theme}）')
+    print(f'发布清单：{layout.existing(directory, "publish-manifest.json")}（标题：{state["title"]}；主题：{theme}）')
     print('七步写作已完成；上传草稿仍需用户明确确认。')
     return 0
 
@@ -313,9 +328,11 @@ def workflow_command(args: argparse.Namespace) -> int:
         selection = preferences.resolve(ROOT, args.platform, args.perspective or args.type,
                                         getattr(args, 'account', None))
         cover = task_cover_style(args, selection)
+        format_theme = task_format_theme(args, selection)
         workflow.initialize(directory, args.title or directory.name, selection['perspective'],
                             selection['platform'], selection['selection_source'],
-                            outline_checkpoint(args, selection), cover, selection.get('account'))
+                            outline_checkpoint(args, selection), cover, selection.get('account'),
+                            format_theme=format_theme or None)
         autostart_board()
     elif args.operation == 'cover-style':
         state = workflow.load(directory)
@@ -351,6 +368,8 @@ def workflow_command(args: argparse.Namespace) -> int:
     print(f'标题与大纲检查点：{"开启" if workflow.outline_required(state) else "已授权跳过"}')
     if state.get('cover_style'):
         print('封面样式：' + json.dumps(state['cover_style'], ensure_ascii=False))
+    if state.get('format_theme'):
+        print(f'排版主题：{state["format_theme"]}')
     profile = platforms.for_state(state)
     if profile['implemented']:
         try:
@@ -416,6 +435,7 @@ def preference_command(args: argparse.Namespace) -> int:
                                     getattr(args, 'account', None))
     if selection['platform'] == platforms.WECHAT:
         selection['cover_style'] = preferences.cover_style(ROOT, account=selection.get('account'))
+        selection['format_theme'] = preferences.format_theme(ROOT, account=selection.get('account'))
     print(json.dumps(selection, ensure_ascii=False, indent=2))
     print(f'OutlineApproval（标题与大纲确认检查点）：'
           f'{preferences.outline_approval(ROOT, selection["platform"], selection.get("account"))}')
@@ -511,6 +531,7 @@ def main(argv: list[str] | None = None) -> int:
     views.add_argument('--perspective', choices=tuple(preferences.PERSPECTIVE_LABELS), default=None)
     views.add_argument('--type', choices=['tech', 'product'], default=None, help='旧版视角参数，兼容 --perspective')
     new.add_argument('--skip-outline', action='store_true', help='用户授权跳过标题与大纲确认检查点')
+    new.add_argument('--format-theme', help='本次微信排版主题（YAML 主题名），覆盖账号配置 format_theme')
     add_cover_arguments(new)
     new.set_defaults(action=new_article)
     flow = commands.add_parser('workflow', help='查看、推进或退回七步创作流程')
@@ -529,6 +550,7 @@ def main(argv: list[str] | None = None) -> int:
             views.add_argument('--perspective', choices=tuple(preferences.PERSPECTIVE_LABELS), default=None)
             views.add_argument('--type', choices=['tech', 'product'], default=None)
             command.add_argument('--skip-outline', action='store_true', help='用户授权跳过标题与大纲确认检查点')
+            command.add_argument('--format-theme', help='本次微信排版主题（YAML 主题名），覆盖账号配置 format_theme')
         elif operation == 'complete':
             command.add_argument('--step', choices=workflow.SUBMITTABLE, required=True)
             command.add_argument('--reviewed', action='store_true', help='已实际检查图片内容')
@@ -551,7 +573,8 @@ def main(argv: list[str] | None = None) -> int:
     board.set_defaults(action=board_command)
     formatting = commands.add_parser('format', help='第七步：排版并保存可发布产物（渲染结果 + publish-manifest.json）')
     formatting.add_argument('article', help='文章目录路径，相对于当前工作目录')
-    formatting.add_argument('--theme', default='default')
+    formatting.add_argument('--theme', default=None,
+                            help='排版主题；缺省用任务快照（创建时来自账号 format_theme 配置），无快照的旧任务用 default；显式指定成功后回写快照')
     formatting.add_argument('--no-preformat', action='store_true', help='保留原文引号与间距')
     formatting.set_defaults(action=format_article)
     image = commands.add_parser('image', help='执行独立图片能力，满足一项配图需求')

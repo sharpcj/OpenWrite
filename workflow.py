@@ -63,7 +63,8 @@ def read_json(path: Path) -> dict:
 
 def initialize(article: Path, title: str = '', perspective: str = 'tech',
                platform: str = platforms.WECHAT, selection_source=None,
-               outline_approval: bool = True, cover_style=None, account=None) -> dict:
+               outline_approval: bool = True, cover_style=None, account=None,
+               format_theme=None) -> dict:
     path = layout.path(article, 'workflow.json')
     if path.exists():
         raise ValueError('workflow.json 已存在；继续任务请查看 status，重做请使用 reset')
@@ -80,6 +81,8 @@ def initialize(article: Path, title: str = '', perspective: str = 'tech',
         state['account'] = account
     if platform == platforms.WECHAT and cover_style:
         state['cover_style'] = preferences.validate_cover_style(cover_style)
+    if platform == platforms.WECHAT and format_theme:
+        state['format_theme'] = preferences.validate_format_theme(format_theme)
     write_json(path, state)
     return state
 
@@ -94,6 +97,8 @@ def load(article: Path) -> dict:
         raise ValueError('workflow.json 格式不正确')
     if 'cover_style' in state:
         preferences.validate_cover_style(state['cover_style'])
+    if 'format_theme' in state:
+        preferences.validate_format_theme(state['format_theme'])
     if 'outline_approval' in state and type(state['outline_approval']) is not bool:
         raise ValueError('workflow.json 的 outline_approval 必须是布尔值')
     if 'account' in state and (not isinstance(state['account'], str) or not state['account'].strip()):
@@ -632,6 +637,9 @@ def complete_format(article: Path, theme: str, preformat: bool, checks: dict) ->
         state['completed'][-1] = record
     else:
         state['completed'].append(record)
+    if preferences.task_platform(state) == platforms.WECHAT:
+        # 排版主题随成功的第七步落快照：显式 --theme 覆盖后重跑不丢失。
+        state['format_theme'] = theme
     state['revision'] += 1
     write_json(layout.path(article, 'workflow.json'), state)
     return state

@@ -36,7 +36,8 @@ DEFAULT_WRITER_ROLE = 'blogger'
 COVER_DIMENSIONS = ('style', 'layout', 'visual_style', 'color_tone')
 # Account fields per platform; unknown fields are rejected instead of ignored.
 ACCOUNT_FIELDS = {
-    'wechat': {'name', 'app_id', 'app_secret', 'author', 'writer_role', 'outline_approval', 'cover'},
+    'wechat': {'name', 'app_id', 'app_secret', 'author', 'writer_role', 'outline_approval',
+               'cover', 'format_theme'},
     'rednote': {'name', 'cookie'},
 }
 PLATFORM_FIELDS = {'enabled', 'default_account', 'accounts'}
@@ -89,6 +90,12 @@ def validate_cover_style(value: dict) -> dict:
     return normalized
 
 
+def validate_format_theme(value) -> str:
+    if not isinstance(value, str) or not value.strip() or '\n' in value or '\r' in value:
+        raise ValueError('排版主题 format_theme 必须为非空单行主题名')
+    return value.strip()
+
+
 def _validate(data, name: str) -> dict:
     """Check the fixed schema; return a normalized copy with role ids resolved."""
     if not isinstance(data, dict):
@@ -135,6 +142,8 @@ def _validate(data, name: str) -> dict:
                     entry[key] = _normalize_role(value, spot)
                 elif key == 'cover':
                     entry[key] = validate_cover_style(value or {})
+                elif key == 'format_theme':
+                    entry[key] = validate_format_theme(value)
                 else:
                     entry[key] = _string(value, spot)
             normalized[account] = entry
@@ -236,6 +245,18 @@ def cover_style(root: Path, layout=None, visual_style=None, color_tone=None, acc
     chosen = {dimension: supplied[dimension] if supplied[dimension] is not None
               else configured.get(dimension) for dimension in COVER_DIMENSIONS}
     return validate_cover_style({key: value for key, value in chosen.items() if value})
+
+
+def format_theme(root: Path, account=None, theme=None) -> str:
+    """Account formatting theme with the explicit per-task choice winning.
+
+    Returns '' when neither the task nor the account configures a theme;
+    the caller falls back to the built-in default.
+    """
+    name = choose_account(root, 'wechat', account)
+    configured = ((_accounts(root, 'wechat').get(name) or {}).get('format_theme') or '') if name else ''
+    chosen = theme if theme is not None else configured
+    return validate_format_theme(chosen) if chosen else ''
 
 
 def resolve(root: Path, platform=None, perspective=None, account=None) -> dict:

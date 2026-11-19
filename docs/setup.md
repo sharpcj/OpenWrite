@@ -111,6 +111,8 @@ wechat:
 .venv/bin/python openwrite.py format articles/my-topic --theme blueprint-tech --no-preformat
 ```
 
+主题也可在 `openwrite.yaml` 的 `wechat.accounts.<账号名>.format_theme` 按账号配置（取值同上或自定义 YAML 主题名）。`new` / `workflow init` 按「显式 `--format-theme` > 账号配置」解析并存入任务快照 `workflow.json.format_theme`；`format` 缺省使用快照主题，`--theme` 显式覆盖并在排版成功后回写快照，重跑不丢失。修改配置只影响新任务；没有快照的旧任务仍用 `default`。小红书卡片主题不受影响。
+
 默认预格式化调整全文中英文间距，以及代码区外成对的 ASCII 双引号；代码区引号保留，但间距处理仍可能影响代码。主题不改变封面或小红书卡片。单纯换主题可直接重跑 `format`；修改上游产物时须按工作流退回。入口自动转换微信代码块，不通过可发布性检查时保留上次成功的 HTML。
 
 批量转换与实时预览脚本已适配 YAML 主题转换器；预览用标准库轮询，无需额外监听依赖。它们属于底层工具，正式任务仍通过根入口排版。
