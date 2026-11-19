@@ -428,13 +428,13 @@ class CoverOverlayTests(unittest.TestCase):
         self.assertEqual(state['completed'][-1]['step'], 'cover')
 
 
-    def test_text_levels_are_theme_defined(self):
+    def test_text_levels_are_style_defined(self):
         import workflow
-        # 仅大标题主题：即使提供副标题/标语，也只保留大标题。
+        # 仅大标题样式：即使提供副标题/标语，也只保留大标题。
         workflow.initialize(self.article, '测试文章',
                             cover_style={'layout': '左文单标题', 'visual_style': '温暖插画',
                                          'color_tone': '暖黄奶油色'})
-        # Theme defaults now preflight real typography; use the WeChat canvas
+        # Style defaults now preflight real typography; use the WeChat canvas
         # rather than the tiny 200x100 backend fixture used by plain overlays.
         request = self.write_plan({'title': '大标题', 'subtitle': '副标题', 'tagline': '小标语'})
         request.update(width=1024, height=432)
@@ -444,7 +444,7 @@ class CoverOverlayTests(unittest.TestCase):
         self.assertEqual(resolved['overlay']['title'], '大标题')
         self.assertNotIn('subtitle', resolved['overlay'])
         self.assertNotIn('tagline', resolved['overlay'])
-        # 三级主题：保留副标题与标语。
+        # 三级样式：保留副标题与标语。
         state = workflow.load(self.article)
         state['cover_style']['layout'] = '左文右图'
         workflow.write_json(layout.path(self.article, 'workflow.json'), state)

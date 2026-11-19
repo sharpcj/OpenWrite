@@ -2,7 +2,7 @@
 
 封面样式由三个独立维度组成。`openwrite.example.yaml` 是模板；在本地 `openwrite.yaml` 的 `wechat.accounts.<账号名>.cover` 下按账号填写：
 
-封面版式由 [wechat-cover-designer](../skills/wechat-cover-designer/SKILL.md) 的**主题预设**驱动，镜像格式化主题的 YAML 范式：每个主题在 `skills/wechat-cover-designer/themes/` 定义背景、主体构图与文字层次（由主题定义，可达三级），`cover_themes.py --list` 可列举。配置用 `cover.theme` 选主题（预设名或别名，如「左文右图」）；`cover.layout` 保留用于自定义构图（不套预设）。已有渲染能力以内的新版式只需加主题文件；新增渲染效果由图片能力实现，再通过主题参数启用。
+封面版式由 [wechat-cover-designer](../skills/wechat-cover-designer/SKILL.md) 的**样式预设**驱动，镜像格式化主题的 YAML 范式：每个样式在 `skills/wechat-cover-designer/styles/` 定义背景、主体构图与文字层次（由样式定义，可达三级），`cover_styles.py --list` 可列举。配置用 `cover.style` 选样式（预设名或别名，如「左文右图」）；`cover.layout` 保留用于自定义构图（不套预设）。已有渲染能力以内的新版式只需加样式文件；新增渲染效果由图片能力实现，再通过样式参数启用。
 
 ```yaml
 wechat:
@@ -10,19 +10,19 @@ wechat:
     账号1:
       name: ""            # 公众号名，用户填写
       cover:
-        theme: left-text-right-image   # 主题预设（或别名「左文右图」）
+        style: left-text-right-image   # 样式预设（或别名「左文右图」）
         visual_style: 温暖插画
         color_tone: 暖黄奶油色
 ```
 
 | 配置项 | 作用 | 示例 |
 |---|---|---|
-| `cover.theme` | 选择封面预设主题（名或别名） | left-text-right-image、full-bleed-single-title、tech-glow、左文右图 |
+| `cover.style` | 选择封面预设样式（名或别名） | left-text-right-image、full-bleed-single-title、tech-glow、左文右图 |
 | `cover.layout` | 自定义构图描述（不套预设时改用此项） | 居中标题、上文下图、自定义构图描述 |
 | `cover.visual_style` | 图片的视觉表现形式 | 温暖插画、科技线稿、写实摄影、极简抽象、自定义品牌插画 |
 | `cover.color_tone` | 全图色彩和氛围 | 暖黄奶油色、青绿渐变、蓝紫渐变、品牌色及色值 |
 
-各项都接受自定义单行描述，不限定为固定套餐。含 `#` 的色值用引号包裹，避免被当作 YAML 注释。每项最长 300 字。`theme` 优先于 `layout` 匹配预设。当前这些配置只作用于微信，且每个账号可以不同；小红书继续使用卡片设计规则。
+各项都接受自定义单行描述，不限定为固定套餐。含 `#` 的色值用引号包裹，避免被当作 YAML 注释。每项最长 300 字。`style` 优先于 `layout` 匹配预设。当前这些配置只作用于微信，且每个账号可以不同；小红书继续使用卡片设计规则。
 
 ## 选择和任务快照
 
@@ -31,9 +31,9 @@ wechat:
 ```bash
 # 使用账号配置中的默认值
 .venv/bin/python openwrite.py new my-topic --title "文章标题"
-# 本次改用全幅居中标题主题，其余沿用账号配置
-.venv/bin/python openwrite.py new another-topic --title "文章标题" --cover-theme full-bleed-single-title
-# 只覆盖视觉风格，主题和色调继续采用各自的配置
+# 本次改用全幅居中标题样式，其余沿用账号配置
+.venv/bin/python openwrite.py new another-topic --title "文章标题" --cover-style full-bleed-single-title
+# 只覆盖视觉风格，样式和色调继续采用各自的配置
 .venv/bin/python openwrite.py new third-topic --title "文章标题" --cover-visual-style "科技线稿"
 # 自定义构图（不套预设）并指定风格与色调
 .venv/bin/python openwrite.py new custom-topic --cover-layout "居中标题" --cover-visual-style "极简抽象" --cover-color-tone "青绿渐变"
@@ -55,11 +55,11 @@ wechat:
 
 - 整张图使用**奶油白到浅杏橙的平滑连续渐变**，不做硬拼接、独立文字面板或暗色遮罩。账号或任务已指定的风格/色调优先；要严格采用参考配色，应明确选择或清除冲突配置。
 - 右侧约 50% 安排**与文章内容对应的完整生活插画场景**，如人物、电脑、木桌、咖啡和绿植。桌面、家具和前景允许自然延伸并裁切至底边，不再要求上下留白，也不固定为剪视频；脸部与关键物件应完整可见。
-- 左侧约 45% 保持安静留白。主题自动注入 `effect: warm-editorial`：**品牌/主题大标题 → 较醒目的多行卖点 → 小标语**。英文品牌默认使用英文粗体，中文标题与卖点使用中文粗体，标语使用常规体，可分别用 `font` / `subtitle_font` / `tagline_font` 指定。
+- 左侧约 45% 保持安静留白。样式自动注入 `effect: warm-editorial`：**品牌/主题大标题 → 较醒目的多行卖点 → 小标语**。英文品牌默认使用英文粗体，中文标题与卖点使用中文粗体，标语使用常规体，可分别用 `font` / `subtitle_font` / `tagline_font` 指定。
 - 底图不渲染文字；文案通过 `overlay` 的 `title` / `subtitle` / `tagline` 由 Pillow 精确叠加。`subtitle` 中的 `\n` 明确分行；过长内容还会自动换行和缩字，放不下时报错，不压右侧主体。
 - 默认字号为 62 / 44 / 22px，左边距约 48px，整组垂直居中；大标题到卖点间距 52px、卖点到标语 48px，多行间距 10px。可用 `margin_ratio`、`title_subtitle_gap`、`subtitle_tagline_gap`、`line_gap`、`vertical_offset` 及已有字号参数覆盖，三个左侧方位仍可选。
-- 默认标题深棕 `#583720`、卖点深棕 `#483326`、标语暖灰 `#928571`，分别由 `color` / `subtitle_color` / `tagline_color` 覆盖。颜色现在是实际渲染默认值，不是未接线的主题变量。该模式只画实心文字，不画光晕、投影、描边、暗层或装饰横线；`scrim` 在该模式不启用。
-- 字体、颜色、数值和排版在获取底图前检查。主题默认参数全部进入有效需求指纹。此次修改直接升级原主题名；引用旧主题的已完成任务需 `workflow reset <目录> --from cover`，重新取图/导入并验收，再重做下游；现有图片不会自动覆盖。科技发光和全幅居中主题不受此更改影响。
+- 默认标题深棕 `#583720`、卖点深棕 `#483326`、标语暖灰 `#928571`，分别由 `color` / `subtitle_color` / `tagline_color` 覆盖。颜色现在是实际渲染默认值，不是未接线的样式变量。该模式只画实心文字，不画光晕、投影、描边、暗层或装饰横线；`scrim` 在该模式不启用。
+- 字体、颜色、数值和排版在获取底图前检查。样式默认参数全部进入有效需求指纹。此次修改直接升级原样式名；引用旧样式的已完成任务需 `workflow reset <目录> --from cover`，重新取图/导入并验收，再重做下游；现有图片不会自动覆盖。科技发光和全幅居中样式不受此更改影响。
 
 需求示例中的 `overlay`（大标题可短于文章标题，细节交给副标题/标语）：
 
@@ -79,7 +79,7 @@ wechat:
 
 - 底图是一整幅暖色编辑插画，构图完整地铺满封面，主体元素偏向画面外圈，中部保留安静的渐变区域承载标题，不再使用左侧独立留白。
 - 文字只有一级大标题；`overlay.position` 默认 `center`，也可用 `top-center` / `bottom-center`，排版宽度最多占全图 80%，始终在整幅封面水平居中，长标题换行后仍逐行居中。
-- 主题默认关闭遮罩，标题沿用深色 `overlay.color`；标题与背景的对比、是否压住主体细节仍需看图验收。
+- 样式默认关闭遮罩，标题沿用深色 `overlay.color`；标题与背景的对比、是否压住主体细节仍需看图验收。
 
 ```json
 {
@@ -103,20 +103,20 @@ wechat:
 
 ```bash
 # 新任务；明确覆盖已有账号可能配置的暖色维度
-.venv/bin/python openwrite.py new tech-topic --cover-theme tech-glow --cover-visual-style "深色科技概念插画" --cover-color-tone "深蓝与冷蓝青色光效"
+.venv/bin/python openwrite.py new tech-topic --cover-style tech-glow --cover-visual-style "深色科技概念插画" --cover-color-tone "深蓝与冷蓝青色光效"
 # 已有任务；已完成封面时先 reset --from cover
-.venv/bin/python openwrite.py workflow cover-style articles/my-topic --cover-theme tech-glow --cover-visual-style "深色科技概念插画" --cover-color-tone "深蓝与冷蓝青色光效"
+.venv/bin/python openwrite.py workflow cover-style articles/my-topic --cover-style tech-glow --cover-visual-style "深色科技概念插画" --cover-color-tone "深蓝与冷蓝青色光效"
 ```
 
-只有主题、未配置其他维度时使用科技主题的风格与色调缺省值；账号或任务中已有的 `visual_style` / `color_tone` 仍优先，切主题不会静默删除这些选择。正文排版主题独立，蓝图科技正文仍在第七步选择 `--theme blueprint-tech`。
+只有样式、未配置其他维度时使用科技样式的视觉风格与色调缺省值；账号或任务中已有的 `visual_style` / `color_tone` 仍优先，切样式不会静默删除这些选择。正文排版主题独立，蓝图科技正文仍在第七步选择 `--theme blueprint-tech`。
 
-封面需求只需提供对应文案，主题自动补齐效果参数：
+封面需求只需提供对应文案，样式自动补齐效果参数：
 
 ```json
 {"title": "连接知识", "subtitle": "OpenWrite · Knowledge", "tagline": "让检索更有依据"}
 ```
 
-可覆盖 `color` / `subtitle_color` / `tagline_color`、`glow_color` / `subtitle_glow_color`、`glow_radius` / `subtitle_glow_radius`、`panel_color` / `panel_alpha` / `panel_fade_ratio`，以及字号、字体、`margin_ratio`、`title_subtitle_gap` / `subtitle_tagline_gap` / `vertical_offset`。数值和颜色在获取底图前校验，错误参数不触发生图调用。`effect: plain` 可显式关闭科技效果。科技效果只由 `tech-glow` 启用，不会应用到暖色或全幅居中主题。
+可覆盖 `color` / `subtitle_color` / `tagline_color`、`glow_color` / `subtitle_glow_color`、`glow_radius` / `subtitle_glow_radius`、`panel_color` / `panel_alpha` / `panel_fade_ratio`，以及字号、字体、`margin_ratio`、`title_subtitle_gap` / `subtitle_tagline_gap` / `vertical_offset`。数值和颜色在获取底图前校验，错误参数不触发生图调用。`effect: plain` 可显式关闭科技效果。科技效果只由 `tech-glow` 启用，不会应用到暖色或全幅居中样式。
 
 同一底图、字体和文案可重复生成一致的合成件；重新 AI 生图只能延续风格，不能保证底图像素一致。移植基准来自旧模板，具体历史文章若使用了自定义参数，还须用其脚本/底图逐项对照；不能仅凭模板迁移就声称所有历史封面完全一致。
 

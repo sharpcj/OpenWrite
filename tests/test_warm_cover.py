@@ -17,7 +17,7 @@ class WarmCoverTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix='openwrite-warm-cover-')
         self.addCleanup(self.tmp.cleanup)
         self.article = Path(self.tmp.name)
-        workflow.initialize(self.article, '测试文章', cover_style={'theme': 'left-text-right-image'})
+        workflow.initialize(self.article, '测试文章', cover_style={'style': 'left-text-right-image'})
         self.runtime = workflow.image_runtime()
         self.renderer = self.runtime.load_module('warm_cover_test', 'cover_text.py')
         self.raw = {'id': 'cover', 'role': 'cover', 'output': 'cover.png', 'width': 1024,
@@ -110,7 +110,7 @@ class WarmCoverTests(unittest.TestCase):
                             fit='exact', overwrite=False))
                     backend.assert_not_called()
 
-    def test_root_cli_uses_warm_theme_and_enforces_stage(self):
+    def test_root_cli_uses_warm_style_and_enforces_stage(self):
         import subprocess
         import sys
         root = Path(__file__).resolve().parents[1]

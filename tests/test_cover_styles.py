@@ -43,17 +43,17 @@ class CoverStyleTests(unittest.TestCase):
         self.assertEqual(custom, dict(STYLE, visual_style='自定义纸雕质感', color_tone='品牌色 #12AABB'))
         self.assertEqual(self.config.read_bytes(), before)
 
-    def test_theme_field_selects_preset_and_cli_override(self):
+    def test_style_field_selects_preset_and_cli_override(self):
         self.config.write_text('wechat:\n  accounts:\n    主号:\n      cover:\n'
-                               '        theme: full-bleed-single-title\n'
+                               '        style: full-bleed-single-title\n'
                                '        color_tone: 暖黄奶油色\n', encoding='utf-8')
         style = preferences.cover_style(self.root)
-        self.assertEqual(style['theme'], 'full-bleed-single-title')
+        self.assertEqual(style['style'], 'full-bleed-single-title')
         self.assertEqual(style['color_tone'], '暖黄奶油色')
-        result = self.cli('new', 'single', '--cover-theme', 'left-text-right-image')
+        result = self.cli('new', 'single', '--cover-style', 'left-text-right-image')
         self.assertEqual(result.returncode, 0, result.stderr)
         state = workflow.load(self.root / 'articles/single')
-        self.assertEqual(state['cover_style']['theme'], 'left-text-right-image')
+        self.assertEqual(state['cover_style']['style'], 'left-text-right-image')
 
     def test_new_and_init_persist_snapshot_and_prompt_overrides_only_one_dimension(self):
         result = self.cli('new', 'topic', '--cover-visual-style', '科技线稿')
@@ -166,14 +166,14 @@ class CoverStyleTests(unittest.TestCase):
             self.assertEqual(picture.size, (1024, 432))
             self.assertIsNotNone(ImageChops.difference(picture, Image.open(base)).getbbox())
 
-    def test_single_title_theme_uses_full_cover_and_centers_text(self):
+    def test_single_title_style_uses_full_cover_and_centers_text(self):
         article = self.root / 'single-title'
         article.mkdir()
         workflow.initialize(article, '单标题封面', outline_approval=False,
-                            cover_style={'theme': 'full-bleed-single-title', 'color_tone': '暖黄奶油色'})
+                            cover_style={'style': 'full-bleed-single-title', 'color_tone': '暖黄奶油色'})
         raw = {'id': 'cover', 'role': 'cover', 'output': 'cover.png', 'width': 1024,
                'height': 432, 'prompt': '主题插画', 'text': [],
-               'overlay': {'title': '单行大标题', 'subtitle': '单标题主题不渲染副题',
+               'overlay': {'title': '单行大标题', 'subtitle': '单标题样式不渲染副题',
                            'color': '#3D2C22'}}
         manifest = layout.path(article, 'image-requests.json')
         workflow.write_json(manifest, {'version': 1, 'images': [raw]})
@@ -186,7 +186,7 @@ class CoverStyleTests(unittest.TestCase):
         self.assertIn('the full ~80%', resolved['composition'])
         self.assertNotIn('the right ~50%', resolved['composition'])
 
-        # 主题限定居中方位：左侧方位回落到默认 center，居中方位保持用户选择。
+        # 样式限定居中方位：左侧方位回落到默认 center，居中方位保持用户选择。
         workflow.write_json(manifest, {'version': 1, 'images': [dict(raw, overlay=dict(raw['overlay'],
                                                                                           position='bottom-left'))]})
         self.assertEqual(runtime.load_request(article, 'cover')['overlay']['position'], 'center')
@@ -215,7 +215,7 @@ class CoverStyleTests(unittest.TestCase):
             return box
 
         for name, title in (('centered-single.png', '单行大标题'),
-                            ('centered-wrapped.png', '单标题主题的长标题换行之后依然整行水平居中')):
+                            ('centered-wrapped.png', '单标题样式的长标题换行之后依然整行水平居中')):
             box = text_box(name, title)
             self.assertLessEqual(abs((box[0] + box[2]) / 2 - width / 2), 8)
 

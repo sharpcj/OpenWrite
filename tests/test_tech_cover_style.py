@@ -1,4 +1,4 @@
-"""Offline theme-to-CLI coverage; all artwork and account data are fixtures."""
+"""Offline style-to-CLI coverage; all artwork and account data are fixtures."""
 import copy
 import json
 import os
@@ -18,14 +18,14 @@ from workflow_fixtures import seed_body
 ROOT = Path(__file__).resolve().parents[1]
 
 
-class TechCoverThemeTests(unittest.TestCase):
+class TechCoverStyleTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix='openwrite-tech-theme-')
+        self.tmp = tempfile.TemporaryDirectory(prefix='openwrite-tech-style-')
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.article = self.root / 'article'
         self.article.mkdir()
-        workflow.initialize(self.article, '测试文章', cover_style={'theme': 'tech-glow'})
+        workflow.initialize(self.article, '测试文章', cover_style={'style': 'tech-glow'})
         self.raw = {'id': 'cover', 'role': 'cover', 'output': 'cover.png',
                     'width': 1024, 'height': 432, 'prompt': '检索增强的知识节点，无文字',
                     'text': [], 'overlay': {'title': '科技封面', 'subtitle': 'OpenWrite',
@@ -38,10 +38,10 @@ class TechCoverThemeTests(unittest.TestCase):
                             {'version': 1, 'images': [raw]})
 
     def test_discovery_defaults_overrides_and_no_input_mutation(self):
-        themes = self.runtime._cover_themes()
-        self.assertIn('tech-glow', themes.list_themes())
+        styles = self.runtime._cover_styles()
+        self.assertIn('tech-glow', styles.list_styles())
         for name in ('tech-glow', '科技发光', '深色科技'):
-            design = themes.design_for({'theme': name})
+            design = styles.design_for({'style': name})
             self.assertEqual(design['overlay_defaults']['effect'], 'tech-glow')
             self.assertIn('dark navy', design['instructions'])
         resolved = self.runtime.load_request(self.article, 'cover')
@@ -59,8 +59,8 @@ class TechCoverThemeTests(unittest.TestCase):
         self.assertEqual(resolved['overlay']['panel_alpha'], 120)
         self.assertNotEqual(self.runtime.request_hash(resolved),
                             self.runtime.request_hash(self.runtime._cover_requirement(self.article, self.raw)))
-        design = themes.design_for({'theme': 'tech-glow', 'visual_style': '科技线稿', 'color_tone': '青绿'})
-        self.assertEqual(design['style'], '科技线稿')
+        design = styles.design_for({'style': 'tech-glow', 'visual_style': '科技线稿', 'color_tone': '青绿'})
+        self.assertEqual(design['visual_style'], '科技线稿')
         self.assertEqual(design['palette'], ['青绿'])
 
     def test_bad_effect_parameters_fail_before_backend(self):
@@ -96,10 +96,10 @@ class TechCoverThemeTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
             return result
 
-        cli('new', 'demo', '--cover-theme', 'full-bleed-single-title')
+        cli('new', 'demo', '--cover-style', 'full-bleed-single-title')
         article = cli_root / 'articles/demo'
-        cli('workflow', 'cover-style', str(article), '--cover-theme', 'tech-glow')
-        self.assertEqual(workflow.load(article)['cover_style']['theme'], 'tech-glow')
+        cli('workflow', 'cover-style', str(article), '--cover-style', 'tech-glow')
+        self.assertEqual(workflow.load(article)['cover_style']['style'], 'tech-glow')
         cli('image', str(article), '--id', 'cover', '--backend', 'file', ok=False)
         seed_body(article)
         workflow.write_json(layout.path(article, 'image-requests.json'),
@@ -114,7 +114,7 @@ class TechCoverThemeTests(unittest.TestCase):
         cli('workflow', 'complete', str(article), '--step', 'cover', ok=False)
         cli('workflow', 'complete', str(article), '--step', 'cover', '--reviewed',
             '--note', '离线测试合成件的程序验收记录，非真实文章视觉验收')
-        cli('workflow', 'cover-style', str(article), '--cover-theme', '左文右图', ok=False)
+        cli('workflow', 'cover-style', str(article), '--cover-style', '左文右图', ok=False)
         workflow.write_json(layout.path(article, 'content-images.json'),
                             {'needed': False, 'reason': '测试正文不需要配图'})
         cli('workflow', 'complete', str(article), '--step', 'content')
@@ -123,8 +123,8 @@ class TechCoverThemeTests(unittest.TestCase):
         self.assertTrue((article / 'article.html').is_file())
         self.assertEqual(workflow.require_publishable(article)['theme'], 'blueprint-tech')
         cli('workflow', 'reset', str(article), '--from', 'cover')
-        cli('workflow', 'cover-style', str(article), '--cover-theme', 'left-text-right-image')
-        self.assertEqual(workflow.load(article)['cover_style']['theme'], 'left-text-right-image')
+        cli('workflow', 'cover-style', str(article), '--cover-style', 'left-text-right-image')
+        self.assertEqual(workflow.load(article)['cover_style']['style'], 'left-text-right-image')
 
 
 if __name__ == '__main__':

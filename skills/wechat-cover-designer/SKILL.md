@@ -1,46 +1,46 @@
 ---
 name: wechat-cover-designer
-description: 微信封面排版主题与设计预设。提供数据驱动的封面版式主题（类似格式化主题），定义背景、主体 placement 与文字层次（由主题定义，可达三级）；把任务 cover_style 快照解析为图片能力可消费的有效设计。在 OpenWrite 微信任务第四步生成封面、选择或切换封面版式、定义封面构图与验收规则时使用。不负责取图/渲染（openwrite-images）与封面文案创作（写作 Skill）。
+description: 微信封面排版样式与设计预设。提供数据驱动的封面版式样式（类似格式化主题），定义背景、主体 placement 与文字层次（由样式定义，可达三级）；把任务 cover_style 快照解析为图片能力可消费的有效设计。在 OpenWrite 微信任务第四步生成封面、选择或切换封面版式、定义封面构图与验收规则时使用。不负责取图/渲染（openwrite-images）与封面文案创作（写作 Skill）。
 ---
 
 # OpenWrite · 微信封面设计
 
-本技能拥有微信封面「长什么样」：版式主题、背景与主体构图、文字层次预设。镜像 [wechat-article-formatter](../wechat-article-formatter/SKILL.md) 的 YAML 主题范式——主题即数据，切换版式无需改代码。
+本技能拥有微信封面「长什么样」：版式样式、背景与主体构图、文字层次预设。镜像 [wechat-article-formatter](../wechat-article-formatter/SKILL.md) 的 YAML 主题范式——样式即数据，切换版式无需改代码。
 
 ## 职责边界
 
 | 角色 | 负责 |
 |---|---|
-| **本技能（cover-designer）** | 版式主题、构图/背景/文字层次预设、主题解析 |
+| **本技能（cover-designer）** | 版式样式、构图/背景/文字层次预设、样式解析 |
 | [openwrite-images](../openwrite-images/SKILL.md) | 取图、裁切、Pillow 叠字渲染、导入（执行层） |
 | 写作 Skill（如 [wechat-blogger-writer](../wechat-blogger-writer/SKILL.md)） | 封面大标题/副标题/标语文案、主体题材、视觉验收 |
 
-本技能只产出**设计数据**，不另起渲染器；渲染仍由 `openwrite-images/scripts/cover_text.py` 消费主题参数完成。仅作用于微信封面；小红书卡片走 html 渲染，不在此列。
+本技能只产出**设计数据**，不另起渲染器；渲染仍由 `openwrite-images/scripts/cover_text.py` 消费样式参数完成。仅作用于微信封面；小红书卡片走 html 渲染，不在此列。
 
-## 主题
+## 样式
 
-主题文件位于 `themes/`，YAML 格式。列出可用主题：
+样式文件位于 `styles/`，YAML 格式。列出可用样式：
 
 ```bash
-.venv/bin/python skills/wechat-cover-designer/scripts/cover_themes.py --list
+.venv/bin/python skills/wechat-cover-designer/scripts/cover_styles.py --list
 ```
 
 当前预设：
 
-| 主题 | 版式别名 | 风格 | 文字层次 |
+| 样式 | 版式别名 | 视觉风格 | 文字层次 |
 |---|---|---|---|
 | `tech-glow` | 科技发光 / 深色科技 | 深蓝科技底图 + 左侧平滑渐变暗层 + 双层发光文字（独立英文粗体） | 大标题 + 副标题 + 小标语 |
 | `left-text-right-image` | 左文右图 / left-text-right-image | 奶油白→浅杏橙渐变 + 右侧贴底生活场景 + 左侧实心深棕文字 | 大标题 + 中副题 + 小标语 |
 | `full-bleed-single-title` | 全幅单标题 / full-bleed-single-title（旧别名「left-text-single-title」「左文单标题」） | 整幅暖色插画铺满封面 + 单行大标题水平居中，不分左右区域 | 仅大标题 |
 
-**文字层次由主题 `text.levels` 定义**，不是全局默认：主题声明几级就渲染几级，未声明的层次即使写进 `overlay` 也会被裁剪。标题本身够有力的文章可选单标题主题；需要补充信息时选三级主题。
+**文字层次由样式 `text.levels` 定义**，不是全局默认：样式声明几级就渲染几级，未声明的层次即使写进 `overlay` 也会被裁剪。标题本身够有力的文章可选单标题样式；需要补充信息时选三级样式。
 
-## 主题结构
+## 样式结构
 
 ```yaml
 name: 左文右图·暖色人物
 description: ...
-layout_aliases: [左文右图, left-text-right-image]   # 与 cover_style.layout 匹配
+layout_aliases: [左文右图, left-text-right-image]   # 与 cover_style.style / cover_style.layout 匹配
 visual_style: 温暖柔和的编辑人物插画
 color_tone: 奶油白到浅杏橙的连续渐变
 background: { type: gradient, rule: <背景构图约束> }
@@ -70,22 +70,22 @@ acceptance: [<可检查的验收项>]
 
 ## 解析与接入
 
-`cover_themes.design_for(cover_style)` 把任务 `workflow.json.cover_style` 快照（`layout` / `visual_style` / `color_tone`）解析为有效设计：
+`cover_styles.design_for(cover_style)` 把任务 `workflow.json.cover_style` 快照（`style` / `layout` / `visual_style` / `color_tone`）解析为有效设计：
 
-- `layout` 命中主题（按文件名或 `layout_aliases`）→ 产出构图 instructions + 叠字几何（position / 允许的 position 范围 / text_width_ratio / scrim）+ style/palette；
+- `style` 或 `layout` 命中样式（按文件名或 `layout_aliases`）→ 产出构图 instructions + 叠字几何（position / 允许的 position 范围 / text_width_ratio / scrim）+ 视觉风格/palette；
 - 自定义版式未命中 → 仅把 layout 描述作为构图指引，不强制叠字几何。
 
-主题用 `text.positions` 限定可用叠字方位：`left-text-right-image` 只允许左侧方位，`full-bleed-single-title` 只允许 `center` / `top-center` / `bottom-center`；任务 overlay 的 `position` 超出范围时回落到主题默认方位。
+样式用 `text.positions` 限定可用叠字方位：`left-text-right-image` 只允许左侧方位，`full-bleed-single-title` 只允许 `center` / `top-center` / `bottom-center`；任务 overlay 的 `position` 超出范围时回落到样式默认方位。
 
 `openwrite-images/scripts/produce.py` 的 `_cover_requirement` 调用本解析器，将结果注入有效需求；工作流与图片能力用同一份有效需求校验指纹。账号封面配置（`openwrite.yaml` 的 `wechat.accounts.<号>.cover`）与 `--cover-layout` 等单次覆盖仍按 [封面样式](../../docs/cover-style.md) 规则存入任务快照。
 
 ## 封面文字与验收
 
-- 文字层次由主题 `text.levels` 定义，最多三级：大标题（`overlay.title`，可短于文章标题）、中副题（`subtitle`）、小标语（`tagline`，弱化色）。主题声明几级就提供并渲染几级（如单标题主题只有大标题）。
+- 文字层次由样式 `text.levels` 定义，最多三级：大标题（`overlay.title`，可短于文章标题）、中副题（`subtitle`）、小标语（`tagline`，弱化色）。样式声明几级就提供并渲染几级（如单标题样式只有大标题）。
 - 底图不渲染文字（`text` 置空），文案由 Pillow 精确叠加。
-- 验收按主题 `acceptance` 与写作侧要求实际看图：背景渐变是否平滑、插画主体是否按主题要求铺满整幅或靠右贴底、保留左侧文字区、文字是否清晰且居中/留白舒适、是否压主体、有无重影。取得图片并验收后由项目流程提交 `--reviewed --note`。
-- `left-text-right-image` 用 `warm-editorial`：英文品牌与中文文字分开选字体，`subtitle` 可用换行符明确分行；只画实心字，不画光晕、投影、描边、遮罩和装饰横线。场景随文章改变，不机械复制参考图中的产品或人物。旧任务使用该主题时需求指纹会变化，先从 cover 退回并重新验收，不能沿用旧结果。
+- 验收按样式 `acceptance` 与写作侧要求实际看图：背景渐变是否平滑、插画主体是否按样式要求铺满整幅或靠右贴底、保留左侧文字区、文字是否清晰且居中/留白舒适、是否压主体、有无重影。取得图片并验收后由项目流程提交 `--reviewed --note`。
+- `left-text-right-image` 用 `warm-editorial`：英文品牌与中文文字分开选字体，`subtitle` 可用换行符明确分行；只画实心字，不画光晕、投影、描边、遮罩和装饰横线。场景随文章改变，不机械复制参考图中的产品或人物。旧任务使用该样式时需求指纹会变化，先从 cover 退回并重新验收，不能沿用旧结果。
 
 ## 扩展新版式
 
-新增 `themes/<name>.yaml`（含 `layout_aliases`、background/subject/text），即被 `--list` 与解析器自动发现。已有渲染能力以内的版式无需改渲染代码；新效果须先在图片能力实现，再由 `text.overlay_defaults` 传递参数。`tech-glow` 通过该字段启用科技叠字，默认参数进入有效需求与指纹；未声明该字段的旧主题保持原有解析结果。主题可用 `visual_style` / `color_tone` 提供缺省值，任务快照中显式指定的维度优先。新增主题应补充对应验收项，并在 [封面样式](../../docs/cover-style.md) 登记。
+新增 `styles/<name>.yaml`（含 `layout_aliases`、background/subject/text），即被 `--list` 与解析器自动发现。已有渲染能力以内的版式无需改渲染代码；新效果须先在图片能力实现，再由 `text.overlay_defaults` 传递参数。`tech-glow` 通过该字段启用科技叠字，默认参数进入有效需求与指纹；未声明该字段的旧样式保持原有解析结果。样式可用 `visual_style` / `color_tone` 提供缺省值，任务快照中显式指定的维度优先。新增样式应补充对应验收项，并在 [封面样式](../../docs/cover-style.md) 登记。

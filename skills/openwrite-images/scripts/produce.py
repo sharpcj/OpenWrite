@@ -37,10 +37,10 @@ def load_module(name: str, filename: str):
 image_config = load_module('openwrite_image_config', 'image_config.py')
 
 
-def _cover_themes():
-    """Load the cover-designer skill's theme resolver (design presets live there)."""
-    path = PROJECT_ROOT / 'skills/wechat-cover-designer/scripts/cover_themes.py'
-    spec = importlib.util.spec_from_file_location('openwrite_cover_themes', path)
+def _cover_styles():
+    """Load the cover-designer skill's style resolver (design presets live there)."""
+    path = PROJECT_ROOT / 'skills/wechat-cover-designer/scripts/cover_styles.py'
+    spec = importlib.util.spec_from_file_location('openwrite_cover_styles', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -96,19 +96,19 @@ def _cover_requirement(article: Path, request: dict) -> dict:
     if state.get('platform', 'wechat') != 'wechat' or not state.get('cover_style'):
         return request
     style = state['cover_style']
-    if (not isinstance(style, dict) or set(style) - {'theme', 'layout', 'visual_style', 'color_tone'}
+    if (not isinstance(style, dict) or set(style) - {'style', 'layout', 'visual_style', 'color_tone'}
             or not all(isinstance(v, str) and v.strip() for v in style.values())):
         raise ValueError('任务 cover_style 格式不正确')
     import copy
     result = copy.deepcopy(request)
     result['cover_style'] = dict(style)
-    design = _cover_themes().design_for(style)
-    if design.get('style'):
-        result['style'] = design['style']
+    design = _cover_styles().design_for(style)
+    if design.get('visual_style'):
+        result['style'] = design['visual_style']
     if design.get('palette'):
         result['palette'] = design['palette']
-    if design.get('theme') is not None:
-        # 预设版式：底图不渲染文字，叠字几何由主题约束。
+    if design.get('style') is not None:
+        # 预设版式：底图不渲染文字，叠字几何由样式约束。
         if result.get('text'):
             raise ValueError('预设封面版式采用后期叠字，请将 text 置空并提供 overlay 标题')
         defaults = design['overlay_defaults']
@@ -124,7 +124,7 @@ def _cover_requirement(article: Path, request: dict) -> dict:
             if key not in ('position', 'text_width_ratio', 'scrim'):
                 overlay.setdefault(key, value)
         overlay.setdefault('scrim', defaults.get('scrim', False))
-        # 文字层次由主题定义：未声明的层次不渲染（如仅大标题的主题）。
+        # 文字层次由样式定义：未声明的层次不渲染（如仅大标题的样式）。
         levels = design.get('levels') or ['title']
         for level in ('subtitle', 'tagline'):
             if level not in levels:

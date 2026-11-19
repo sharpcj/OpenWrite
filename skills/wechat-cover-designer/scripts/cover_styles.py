@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Data-driven cover layout themes for WeChat covers.
+"""Data-driven cover layout styles for WeChat covers.
 
-Mirrors the formatter's YAML-theme pattern: each preset in ``themes/`` describes
+Mirrors the formatter's YAML-theme pattern: each preset in ``styles/`` describes
 background, subject placement and text hierarchy. The resolver turns a task's
 ``cover_style`` snapshot into design fields (composition instructions + overlay
-geometry + style/palette) that the image capability consumes. This skill owns
+geometry + visual style/palette) that the image capability consumes. This skill owns
 "how a cover looks"; openwrite-images owns fetching/rendering; writing skills
 own the cover wording.
 """
@@ -15,20 +15,20 @@ from pathlib import Path
 import yaml
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
-THEMES_DIR = SKILL_DIR / 'themes'
+STYLES_DIR = SKILL_DIR / 'styles'
 
 
-def list_themes() -> list:
-    return sorted(path.stem for path in THEMES_DIR.glob('*.yaml'))
+def list_styles() -> list:
+    return sorted(path.stem for path in STYLES_DIR.glob('*.yaml'))
 
 
-def load_theme(name: str) -> dict:
-    path = THEMES_DIR / f'{name}.yaml'
+def load_style(name: str) -> dict:
+    path = STYLES_DIR / f'{name}.yaml'
     if not path.is_file():
-        raise ValueError(f'未知封面主题：{name}（可用：{"、".join(list_themes()) or "无"}）')
+        raise ValueError(f'未知封面样式：{name}（可用：{"、".join(list_styles()) or "无"}）')
     data = yaml.safe_load(path.read_text(encoding='utf-8'))
     if not isinstance(data, dict) or not data.get('name'):
-        raise ValueError(f'封面主题 {name} 格式不正确（需含 name）')
+        raise ValueError(f'封面样式 {name} 格式不正确（需含 name）')
     return data
 
 
@@ -36,11 +36,11 @@ def find_by_layout(layout: str):
     """Match a layout description to a preset by file name or layout_aliases."""
     if not layout:
         return None
-    for name in list_themes():
-        theme = load_theme(name)
-        aliases = theme.get('layout_aliases') or []
+    for name in list_styles():
+        style = load_style(name)
+        aliases = style.get('layout_aliases') or []
         if layout == name or layout in aliases:
-            return theme
+            return style
     return None
 
 
@@ -54,10 +54,10 @@ def design_for(cover_style: dict) -> dict:
     Known layouts map to a preset and yield composition instructions + overlay
     geometry; custom layouts fall back to using the layout text as guidance.
     """
-    layout = (cover_style.get('theme') or cover_style.get('layout') or '').strip()
+    layout = (cover_style.get('style') or cover_style.get('layout') or '').strip()
     design = {
-        'theme': None,
-        'style': cover_style.get('visual_style') or None,
+        'style': None,
+        'visual_style': cover_style.get('visual_style') or None,
         'palette': [cover_style['color_tone']] if cover_style.get('color_tone') else None,
         'instructions': layout,
         'overlay_defaults': {},
@@ -65,15 +65,15 @@ def design_for(cover_style: dict) -> dict:
         'levels': None,
         'positions': None,
     }
-    theme = find_by_layout(layout)
-    if theme is None:
+    style = find_by_layout(layout)
+    if style is None:
         return design
-    background = theme.get('background') or {}
-    subject = theme.get('subject') or {}
-    text = theme.get('text') or {}
-    design['style'] = design['style'] or theme.get('visual_style')
-    if design['palette'] is None and theme.get('color_tone'):
-        design['palette'] = [theme['color_tone']]
+    background = style.get('background') or {}
+    subject = style.get('subject') or {}
+    text = style.get('text') or {}
+    design['visual_style'] = design['visual_style'] or style.get('visual_style')
+    if design['palette'] is None and style.get('color_tone'):
+        design['palette'] = [style['color_tone']]
     parts = [layout]
     if background.get('rule'):
         parts.append(str(background['rule']).strip())
@@ -86,7 +86,7 @@ def design_for(cover_style: dict) -> dict:
         parts.append(f"the {text.get('region', 'left')} ~{_percent(text.get('width_ratio', 0.45))}% "
                      f"{str(text.get('guidance', '')).strip()}")
     parts.append('no text rendered in the base image')
-    design['theme'] = theme.get('name')
+    design['style'] = style.get('name')
     design['instructions'] = '; '.join(part for part in parts if part)
     design['levels'] = list(text.get('levels') or ['title'])
     design['overlay_defaults'] = {
@@ -95,8 +95,8 @@ def design_for(cover_style: dict) -> dict:
         'scrim': text.get('scrim', False),
         **(text.get('overlay_defaults') or {}),
     }
-    # 主题可声明允许的叠字方位（如居中式版式只允许水平居中相关方位）；
-    # 未声明时沿用左文版式的左侧方位，保持旧主题行为。
+    # 样式可声明允许的叠字方位（如居中式版式只允许水平居中相关方位）；
+    # 未声明时沿用左文版式的左侧方位，保持旧样式行为。
     if text.get('positions'):
         design['positions'] = list(text['positions'])
     design['text_defaults'] = {key: text[key] for key in
@@ -108,14 +108,14 @@ def design_for(cover_style: dict) -> dict:
 def main(argv=None) -> int:
     import argparse
     import json
-    parser = argparse.ArgumentParser(description='列出或解析微信封面排版主题')
-    parser.add_argument('--list', action='store_true', help='列出可用主题')
+    parser = argparse.ArgumentParser(description='列出或解析微信封面排版样式')
+    parser.add_argument('--list', action='store_true', help='列出可用样式')
     parser.add_argument('--layout', help='按版式描述解析有效设计')
     args = parser.parse_args(argv)
     if args.list:
-        for name in list_themes():
-            theme = load_theme(name)
-            print(f'{name}\t{theme.get("name", "")}\t{theme.get("description", "")}')
+        for name in list_styles():
+            style = load_style(name)
+            print(f'{name}\t{style.get("name", "")}\t{style.get("description", "")}')
         return 0
     if args.layout:
         print(json.dumps(design_for({'layout': args.layout}), ensure_ascii=False, indent=2))
