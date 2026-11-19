@@ -3,7 +3,6 @@ import layout
 from argparse import Namespace
 import importlib.util
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -15,8 +14,6 @@ from unittest.mock import patch
 import preferences
 import workflow
 from workflow_fixtures import finish_article
-
-os.environ['OPENWRITE_BOARD_AUTO'] = '0'  # 测试不得拉起真实看板或弹浏览器
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('openwrite_format_theme_test', ROOT / 'openwrite.py')

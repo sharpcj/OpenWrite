@@ -87,7 +87,7 @@ class TechCoverStyleTests(unittest.TestCase):
         shutil.copytree(ROOT / 'skills', cli_root / 'skills',
                         ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*token*', '.env*'))
         (cli_root / 'openwrite.yaml').write_text('wechat:\n  accounts:\n    demo: {}\n', encoding='utf-8')
-        env = dict(os.environ, OPENWRITE_BOARD_AUTO='0')
+        env = dict(os.environ)
 
         def cli(*args, ok=True):
             result = subprocess.run([sys.executable, '-B', str(cli_root / 'openwrite.py'), *args],

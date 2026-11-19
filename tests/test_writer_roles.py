@@ -1,6 +1,5 @@
 """Writer role presets: discovery, resolution, snapshots and role-driven gates."""
 import layout
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -13,7 +12,6 @@ import preferences
 import workflow
 import writer_roles
 
-os.environ['OPENWRITE_BOARD_AUTO'] = '0'  # 测试不得拉起真实看板或弹浏览器
 
 ROOT = Path(__file__).resolve().parents[1]
 

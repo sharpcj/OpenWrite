@@ -12,8 +12,7 @@ import unittest
 from PIL import Image, ImageChops, ImageDraw
 import preferences
 import workflow
-import os
-os.environ['OPENWRITE_BOARD_AUTO'] = '0'  # 测试不得拉起真实看板或弹浏览器
+
 
 ROOT = Path(__file__).resolve().parents[1]
 STYLE = {'layout': '左文右图', 'visual_style': '温暖插画', 'color_tone': '暖黄奶油色'}

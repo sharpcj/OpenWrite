@@ -37,11 +37,9 @@ py -3 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 .venv\Scripts\python.exe openwrite.py setup
 .venv\Scripts\python.exe openwrite.py doctor
-# 创建任务前关闭自动后台看板：其路径目前依赖 fcntl
-$env:OPENWRITE_BOARD_AUTO = "0"
 ```
 
-原生 Windows 暂不支持自动后台看板，建议在 macOS / Linux 或 WSL 使用该能力。下文使用 `.venv/bin/python`；Windows 替换为 `.venv\Scripts\python.exe`。其他文档中的 `python3` 同样指已安装项目依赖的解释器。
+故事板在 Windows 上双击 `看板.bat` 启动。下文使用 `.venv/bin/python`；Windows 替换为 `.venv\Scripts\python.exe`。其他文档中的 `python3` 同样指已安装项目依赖的解释器。
 
 ### 小红书浏览器依赖
 
@@ -120,12 +118,15 @@ wechat:
 ## 实时故事板
 
 ```bash
+# 方式一：双击项目根目录的 看板.command（macOS）/ 看板.sh（Linux）/ 看板.bat（Windows）
+# 方式二：命令行启动（前台运行，Ctrl+C 停止）
 .venv/bin/python openwrite.py board
 .venv/bin/python openwrite.py board --port 9000 --no-browser
+# 停止后台残留的看板进程（非默认端口同时传 --port）
 .venv/bin/python openwrite.py board --stop
 ```
 
-默认地址为 `http://127.0.0.1:8765`，仅绑定本机。`new` / `workflow init` 成功后自动后台启动或复用看板，并打开默认浏览器；设置进程环境变量 `OPENWRITE_BOARD_AUTO=0` 可关闭自动行为。`--stop` 停止指定端口的后台进程，非默认端口同时传 `--port`。看板是长驻进程，按代码指纹（核心模块与角色预设的内容哈希）判定新旧：代码更新后再次 `new` / `workflow init` 或运行 `board` 会自动停掉旧进程并以当前代码重启，避免旧代码读不懂新配置/新状态导致看板无数据。
+默认地址为 `http://127.0.0.1:8765`，仅绑定本机。看板**不再随 `new` / `workflow init` 自动启动**，需要时双击启动脚本或运行 `board`。双击方式在前台运行：关闭脚本窗口或按 Ctrl+C 即停止服务，浏览器标签页可随手关闭；若已在运行则提示复用现有实例并打开浏览器。Linux 桌面双击 `.sh` 的行为因文件管理器而异：GNOME 需在「文件 → 首选项 → 行为」中选择「运行可执行文本文件」，KDE 可直接运行；也可在终端执行 `./看板.sh`。看板是长驻进程，按代码指纹（核心模块与角色预设的内容哈希）判定新旧：代码更新后再次启动会自动停掉旧进程并以当前代码重启，避免旧代码读不懂新配置/新状态导致看板无数据。
 
 左侧自上而下为：全局统计（已创建微信/小红书任务总数，不受下方过滤影响）、两个账号占比饼图（微信/小红书各账号文章占比，旧文章归入「未指定账号」）、平台与账号选择器（默认微信、账号1，账号名优先显示公众号名 `name`）、日期范围，以及过滤后的任务列表（分页、按创建日期倒序，列表项不再显示平台）。右侧显示选中任务的七步进展和交付件预览。页面每两秒刷新，只读，不修改任务状态、不读取凭证。新任务记录 `created_at`，旧任务回退到状态文件时间。
 

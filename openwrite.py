@@ -6,7 +6,6 @@ import layout
 import argparse
 import importlib.util
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 import re
@@ -96,20 +95,8 @@ def new_article(args: argparse.Namespace) -> int:
     elif not profile.get('publish_implemented'):
         print(f'{profile["label"]}选择已保存；创作流程可推进，上传适配器尚未实现，完成后需手动发布。')
     print('已创建需求、来源清单、分析与正文草稿及 workflow.json；当前步骤：search。')
-    autostart_board()
+    print('故事板：双击 看板.command / 看板.sh / 看板.bat（macOS / Linux / Windows）或运行 openwrite.py board 启动。')
     return 0
-
-
-def autostart_board() -> None:
-    """写作任务入口附带看板：后台拉起并开默认浏览器；OPENWRITE_BOARD_AUTO=0 可关闭。"""
-    if os.environ.get('OPENWRITE_BOARD_AUTO', '1') == '0':
-        return
-    import board
-    url, started = board.ensure_board()
-    if started:
-        print(f'看板已自动后台启动：{url}（已打开默认浏览器；停止：openwrite.py board --stop）')
-    else:
-        print(f'看板已在运行：{url}（已打开默认浏览器）')
 
 
 def task_cover_style(args: argparse.Namespace, selection: dict) -> dict:
@@ -340,7 +327,6 @@ def workflow_command(args: argparse.Namespace) -> int:
                             selection['platform'], selection['selection_source'],
                             outline_checkpoint(args, selection), cover, selection.get('account'),
                             format_theme=format_theme or None)
-        autostart_board()
     elif args.operation == 'cover-style':
         state = workflow.load(directory)
         if preferences.task_platform(state) != platforms.WECHAT:

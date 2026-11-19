@@ -60,7 +60,7 @@ articles/<name>/
 └── workflow/                            # State, image records and publish manifest
 ```
 
-The read-only board shows progress and artifact previews. New tasks automatically start it and open a browser. See [board controls](docs/setup.md#实时故事板) for disabling startup, manual use and ports. Resume a task with:
+The read-only board shows progress and artifact previews. Double-click `看板.command` / `看板.sh` / `看板.bat` (macOS / Linux / Windows) to start it and open a browser; closing the script window stops it. See [board controls](docs/setup.md#实时故事板) for manual use and ports. Resume a task with:
 
 ```bash
 .venv/bin/python openwrite.py workflow status articles/rag-guide

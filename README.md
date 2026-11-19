@@ -60,7 +60,7 @@ articles/<名称>/
 └── workflow/                           # 状态、图片记录与发布清单
 ```
 
-可通过只读故事板查看任务进度和产物预览。新建任务时自动启动并打开浏览器；关闭、手动启动及端口设置见 [看板说明](docs/setup.md#实时故事板)。恢复任务使用：
+可通过只读故事板查看任务进度和产物预览。双击 `看板.command` / `看板.sh` / `看板.bat`（macOS / Linux / Windows）启动并打开浏览器，关闭脚本窗口即停止；停止后台实例、端口等见 [看板说明](docs/setup.md#实时故事板)。恢复任务使用：
 
 ```bash
 .venv/bin/python openwrite.py workflow status articles/rag-guide
