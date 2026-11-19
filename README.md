@@ -13,7 +13,7 @@ OpenWrite 是面向 AI Agent 的图文创作工作区，支持微信公众号与
 
 ## 快速开始
 
-macOS / Linux 安装 Python 3 和 Make 后，在项目根目录运行：
+macOS / Linux 安装 Python 3.9+（建议 3.10+）和 Make 后，在项目根目录运行：
 
 ```bash
 make setup
@@ -22,7 +22,7 @@ make doctor
 
 `make setup` 创建或复用 `.venv`、安装依赖，并从 `openwrite.example.yaml` 生成本地 `openwrite.yaml`，不覆盖已有配置。依赖安装需要联网；命令不会填写凭证、生图或发布。
 
-编辑 `openwrite.yaml` 维护平台账号、写作视角及按需使用的服务凭证。配置为嵌套 YAML，每个平台可维护多个账号（凭证、视角与封面样式按账号隔离）；模板默认启用微信与自媒体博主，微信还支持技术作者、产品经理、新闻记者与小说家视角（预设在 `writer_roles/`，可增删改），小红书目前支持博主视角。图片来源和发布服务需要各自配置，凭证可等使用前填写。
+编辑 `openwrite.yaml` 维护平台账号、写作视角及按需使用的服务凭证。配置为嵌套 YAML，每个平台可维护多个账号（凭证、视角、封面样式与排版主题按账号隔离）；模板默认启用微信与自媒体博主，微信还支持技术作者、产品经理、新闻记者与小说家视角（预设在 `writer_roles/`，可增删改），小红书目前支持博主视角。图片来源和发布服务需要各自配置，凭证可等使用前填写。
 
 小红书卡片渲染及发布还需一次性安装浏览器：
 
@@ -30,7 +30,7 @@ make doctor
 .venv/bin/python -m playwright install chromium
 ```
 
-手动初始化、Windows PowerShell、看板限制及配置排错见 [环境与运行](docs/setup.md)。`doctor` 只做本地检查，不验证外部服务或凭证。
+手动初始化、Windows PowerShell、看板使用及配置排错见 [环境与运行](docs/setup.md)。`doctor` 只做本地检查，不验证外部服务或凭证。
 
 ## 开始创作
 

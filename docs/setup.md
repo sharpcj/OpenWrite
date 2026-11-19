@@ -4,11 +4,11 @@
 
 ## 环境准备
 
-核心脚本要求 Python 3.8+，依赖为 PyYAML、Requests、Pillow；`requirements.txt` 也包含用于小红书卡片渲染与发布的 Playwright。入口和 Skill 子脚本必须使用同一 Python 环境。
+核心脚本要求 Python 3.9+（建议 3.10+；3.9 已结束官方维护，新版 Pillow/Playwright 不再支持 3.8），依赖为 PyYAML、Requests、Pillow；`requirements.txt` 也包含用于小红书卡片渲染与发布的 Playwright。入口和 Skill 子脚本必须使用同一 Python 环境。
 
 ### macOS / Linux 一键初始化
 
-安装好 Python 3 和 Make 后，在项目根目录运行：
+安装好 Python 3.9+（建议 3.10+）和 Make 后，在项目根目录运行：
 
 ```bash
 make setup

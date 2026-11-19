@@ -456,7 +456,7 @@ def _card_runtime_status() -> str:
 
 
 def doctor(args: argparse.Namespace) -> int:
-    checks = [('Python >= 3.8', sys.version_info >= (3, 8))]
+    checks = [('Python >= 3.9', sys.version_info >= (3, 9))]
     checks.extend((f'依赖 {name}', importlib.util.find_spec(name) is not None)
                   for name in ('yaml', 'requests', 'PIL'))
     for name in SKILL_NAMES:

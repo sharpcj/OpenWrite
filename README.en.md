@@ -13,7 +13,7 @@ OpenWrite is a project-local content workspace for AI agents, supporting WeChat 
 
 ## Quick start
 
-On macOS / Linux, install Python 3 and Make, then run from the repository root:
+On macOS / Linux, install Python 3.9+ (3.10+ recommended) and Make, then run from the repository root:
 
 ```bash
 make setup
@@ -22,7 +22,7 @@ make doctor
 
 `make setup` creates or reuses `.venv`, installs dependencies, and copies `openwrite.example.yaml` to local `openwrite.yaml` without overwriting existing configuration. Dependency installation needs network access. It does not fill credentials, generate images or publish anything.
 
-Edit `openwrite.yaml` for platforms, accounts, writer role and optional service credentials. Each platform can hold multiple accounts under `wechat.accounts` / `rednote.accounts`, keyed by generic names such as `账号1` / `账号2`; a platform is enabled when it has at least one account (`enabled: false` pauses it). The account key is the identifier used by `--account` and task snapshots; each account also accepts an optional `name` string for human recognition — Official account name (user-filled) on WeChat, Account name (user-filled) on Rednote. Settings merge in the order `defaults` → platform section → account → task snapshot. The template enables WeChat with the blogger role. WeChat also supports technical, product-manager, news-reporter and novelist perspectives (data-driven presets in `writer_roles/`, overridable per account); Rednote only supports the blogger role. Configure image sources under `image_sources` and publishing credentials before using them.
+Edit `openwrite.yaml` for platforms, accounts, writer role and optional service credentials. Each platform can hold multiple accounts under `wechat.accounts` / `rednote.accounts`, keyed by generic names such as `账号1` / `账号2`; a platform is enabled when it has at least one account (`enabled: false` pauses it). The account key is the identifier used by `--account` and task snapshots; each account also accepts an optional `name` string for human recognition — Official account name (user-filled) on WeChat, Account name (user-filled) on Rednote. Settings merge in the order `defaults` → platform section → account → task snapshot; credentials, writer role, cover style and format theme are isolated per account. The template enables WeChat with the blogger role. WeChat also supports technical, product-manager, news-reporter and novelist perspectives (data-driven presets in `writer_roles/`, overridable per account); Rednote only supports the blogger role. Configure image sources under `image_sources` and publishing credentials before using them.
 
 Rednote card rendering and publishing additionally need a one-time browser download:
 
@@ -30,7 +30,7 @@ Rednote card rendering and publishing additionally need a one-time browser downl
 .venv/bin/python -m playwright install chromium
 ```
 
-See [environment and runtime setup](docs/setup.md) for manual installation, Windows PowerShell, board limitations and troubleshooting. `doctor` performs local checks only; it does not validate external services or credentials. Detailed project guides are maintained in Chinese.
+See [environment and runtime setup](docs/setup.md) for manual installation, Windows PowerShell, board usage and troubleshooting. `doctor` performs local checks only; it does not validate external services or credentials. Detailed project guides are maintained in Chinese.
 
 ## Start writing
 
