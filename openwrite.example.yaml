@@ -11,7 +11,9 @@
 
 # 全局缺省：写作视角与流程开关。微信账号可逐项覆盖；小红书仅支持 blogger。
 defaults:
-  # 写作视角：blogger / tech / product（也接受 SelfMediaBlogger / TechWriter / ProductManager）
+  # 写作视角：blogger / tech / product / news / novelist
+  #（也接受 SelfMediaBlogger / TechWriter / ProductManager / NewsReporter / Novelist 等名称/别名）
+  # 视角预设在 writer_roles/*.yaml：约束、门禁与 Skill 路由，增删改文件即增删改视角。
   writer_role: blogger
   # OutlineApproval=true：分析完成后、写正文前，必须给出三个备选标题
   #（至少一个激进悬念、一个客观中性，第三个默认利益实用）与大纲，

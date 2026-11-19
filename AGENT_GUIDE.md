@@ -17,8 +17,10 @@ OpenWrite 支持微信公众号与小红书图文创作，Skill 位于项目 `sk
 
 1. 用户明确选择优先，由 Agent 转为 `--platform wechat|rednote`、`--account <账号名>`、`--perspective blogger|tech|product`。未指定的维度不擅自传参；话题词不等于选择意图。
 2. 未指定平台时，采用唯一启用项（平台下账号数 ≥ 1 即启用）；零项或多项启用必须向用户确认，不自动选择首项。模板默认启用微信，没有 `openwrite.yaml` 时平台没有默认项。
-3. 未指定账号时，平台唯一账号自动选用，多账号用 `default_account`，否则向用户确认。未指定视角时读取 `defaults.writer_role`（微信账号可覆盖），缺省默认自媒体博主，无需确认。微信支持 `blogger` / `tech` / `product`，小红书仅支持 `blogger`；遇到不支持的组合，说明限制并取得明确选择，不静默切换。
-4. 继续任务沿用状态中的平台、账号、视角、流程开关、封面快照与排版主题，不因 `openwrite.yaml` 后续变化重选；发布按任务账号取凭证。可先用 `preferences` 查看解析结果。
+3. 未指定账号时，平台唯一账号自动选用，多账号用 `default_account`，否则向用户确认。未指定视角时读取 `defaults.writer_role`（微信账号可覆盖），缺省默认自媒体博主，无需确认。微信支持 `blogger` / `tech` / `product` / `news` / `novelist`，小红书仅支持 `blogger`；遇到不支持的组合，说明限制并取得明确选择，不静默切换。
+4. 继续任务沿用状态中的平台、账号、视角、流程开关、封面快照、排版主题与角色约束快照，不因 `openwrite.yaml` 后续变化重选；发布按任务账号取凭证。可先用 `preferences` 查看解析结果。
+
+写作视角是数据驱动预设（根目录 `writer_roles/*.yaml`）：每个角色声明显示名与别名、写作约束（软约束，创建任务时写入 brief 的「写作约束（角色预设）」并快照为 `writer_profile`）、结构门禁开关（`gates`）与分平台写作 Skill 路由（`skills`）。增删改 YAML 即增删改可选视角，无需改代码；内容要求由写作 Agent 遵守，门禁由控制器按任务快照执行。
 
 微信封面设计前读取任务样式快照。只把用户明确选择的维度转为 `--cover-layout`、`--cover-visual-style`、`--cover-color-tone`；未确定且有歧义的维度请用户选择。修改当前任务用 `workflow cover-style`，已完成封面须先退回 cover。版式、视觉风格、色调及左文右图验收规则见 [封面样式](docs/cover-style.md)，设计时读取。
 
@@ -33,6 +35,7 @@ OpenWrite 支持微信公众号与小红书图文创作，Skill 位于项目 `sk
 | 微信 `blogger` | [wechat-blogger-writer](skills/wechat-blogger-writer/SKILL.md) |
 | 微信 `tech` | [wechat-tech-writer](skills/wechat-tech-writer/SKILL.md) |
 | 微信 `product` | [wechat-product-manager-writer](skills/wechat-product-manager-writer/SKILL.md) |
+| 微信 `news` / `novelist` | [openwrite-generic-writer](skills/openwrite-generic-writer/SKILL.md)（角色约束驱动） |
 | 小红书图文 | [rednote-note-writer](skills/rednote-note-writer/SKILL.md) |
 | 生成、替换或导入图片，含卡片渲染 | [openwrite-images](skills/openwrite-images/SKILL.md) |
 | 微信第四步封面版式与设计预设 | [wechat-cover-designer](skills/wechat-cover-designer/SKILL.md) |
@@ -87,6 +90,7 @@ OpenWrite 支持微信公众号与小红书图文创作，Skill 位于项目 `sk
 | `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` | 只引导本指南 |
 | `README.md` / `README.en.md` | 项目介绍、快速开始和文档导航，保持中英文对应 |
 | 本指南 | Agent 决策规则、技能路由、确认边界与交付要求 |
+| `writer_roles/` + `writer_roles.py` | 视角预设（约束、门禁、Skill 路由）与解析器 |
 | `docs/setup.md` | 环境、凭证、命令运行、排版选项、看板与排错 |
 | 其他 `docs/` | 阶段协议、JSON 示例、选择规则、图片契约与平台接入 |
 | `skills/` | 当前阶段的创作方法与底层能力操作 |

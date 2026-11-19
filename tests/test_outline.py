@@ -119,8 +119,10 @@ class OutlineConfigTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix='openwrite-outline-config-')
         self.addCleanup(self.tmp.cleanup)
         self.project = Path(self.tmp.name).resolve()
-        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py'):
+        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py',
+                     'writer_roles.py'):
             shutil.copy2(ROOT / name, self.project / name)
+        shutil.copytree(ROOT / 'writer_roles', self.project / 'writer_roles')
         shutil.copytree(ROOT / 'skills', self.project / 'skills')
 
     def write_config(self, text):

@@ -1,0 +1,10 @@
+name: 小说家
+description: 悬念驱动的虚构写作，允许符合逻辑的想象
+aliases: [Novelist, 小说家]
+constraints: |
+  内容具有悬念，在合适的主题下，允许发挥想象，进行符合逻辑的虚构。
+gates:
+  sources_required: false
+  source_citations_required: false
+skills:
+  wechat: openwrite-generic-writer

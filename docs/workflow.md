@@ -14,8 +14,8 @@
 
 | 步骤标识 | 必需产物 | 代码检查 |
 |---|---|---|
-| `search` | `process/sources.json` | 至少一个来源；有标题、实际提取内容及 URL，或明确为用户资料 |
-| `analysis` | `process/analysis.md` | 有实际内容，通过 `source:<id>` 关联已有来源 |
+| `search` | `process/sources.json` | 至少一个来源（角色门禁 `sources_required`，novelist 允许空清单）；有标题、实际提取内容及 URL，或明确为用户资料 |
+| `analysis` | `process/analysis.md` | 有实际内容，通过 `source:<id>` 关联已有来源（角色门禁 `source_citations_required`，novelist 可不引用） |
 | `draft` | `process/outline.md`、`workflow/outline.json`、`process/draft.md`（小红书另需 `process/cards.md`） | 标题与大纲已获用户确认；正文不只是标题、不嵌图；H1 与已确认标题一致 |
 | `cover` | 封面需求、图片执行结果、封面文件 | 需求指纹一致；图片可解码、格式与尺寸正确；提交验收记录 |
 | `content` | `workflow/content-images.json`，以及需要的正文配图 | 明确是否需要；决策与清单一致；需要的图片均有效、已验收；微信校验插入锚点，小红书校验 `order` |
@@ -61,7 +61,7 @@
 }
 ```
 
-用户提供的资料可用 `"kind": "user"`，不要求 URL，但仍需标题和实际内容。代码检查格式，来源真实性与搜索充分性由执行者核实。
+用户提供的资料可用 `"kind": "user"`，不要求 URL，但仍需标题和实际内容。代码检查格式，来源真实性与搜索充分性由执行者核实。来源与引用门禁按任务角色快照执行（`writer_roles/*.yaml` 的 `gates`）：blogger/tech/product/news 要求非空来源与分析引用，novelist 允许空来源与无引用分析；旧任务无快照时沿用其视角的当前定义。
 
 分析写入 `process/analysis.md`，例如“source:s1 支持……；尚未确认……；文章核心观点为……”。
 

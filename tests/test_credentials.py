@@ -71,8 +71,10 @@ class ConfigSetupTests(unittest.TestCase):
         self.assertEqual(outside.read_text(encoding='utf-8'), 'secret')
 
     def test_cli_setup_creates_config_and_second_run_keeps_it(self):
-        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py'):
+        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py',
+                     'writer_roles.py'):
             shutil.copy2(ROOT / name, self.project / name)
+        shutil.copytree(ROOT / 'writer_roles', self.project / 'writer_roles', dirs_exist_ok=True)
         shutil.copy2(ROOT / preferences.TEMPLATE_NAME, self.project / preferences.TEMPLATE_NAME)
         command = [sys.executable, '-B', str(self.project / 'openwrite.py'), 'setup']
         first = subprocess.run(command, cwd=self.project, capture_output=True, text=True)

@@ -11,6 +11,7 @@ from datetime import datetime
 
 import platforms
 import preferences
+import writer_roles
 from urllib.parse import urlparse
 
 STEPS = ('search', 'analysis', 'draft', 'cover', 'content', 'markdown', 'format')
@@ -83,6 +84,7 @@ def initialize(article: Path, title: str = '', perspective: str = 'tech',
         state['cover_style'] = preferences.validate_cover_style(cover_style)
     if platform == platforms.WECHAT and format_theme:
         state['format_theme'] = preferences.validate_format_theme(format_theme)
+    state['writer_profile'] = writer_roles.profile_for(perspective)
     write_json(path, state)
     return state
 
@@ -99,6 +101,8 @@ def load(article: Path) -> dict:
         preferences.validate_cover_style(state['cover_style'])
     if 'format_theme' in state:
         preferences.validate_format_theme(state['format_theme'])
+    if 'writer_profile' in state:
+        writer_roles.validate_profile(state['writer_profile'])
     if 'outline_approval' in state and type(state['outline_approval']) is not bool:
         raise ValueError('workflow.json 的 outline_approval 必须是布尔值')
     if 'account' in state and (not isinstance(state['account'], str) or not state['account'].strip()):
@@ -119,11 +123,14 @@ def body(path: Path) -> str:
     return text
 
 
-def sources(article: Path) -> list:
+def sources(article: Path, required: bool = True) -> list:
     data = read_json(layout.existing(article, 'sources.json'))
     items = data.get('sources')
-    if data.get('version') != 1 or not isinstance(items, list) or not items:
-        raise ValueError('sources.json 需要 version: 1 和非空 sources 列表')
+    if data.get('version') != 1 or not isinstance(items, list) or (required and not items):
+        raise ValueError('sources.json 需要 version: 1 和非空 sources 列表' if required
+                         else 'sources.json 需要 version: 1 和 sources 列表')
+    if not items:
+        return []
     ids = set()
     for item in items:
         if not isinstance(item, dict):
@@ -327,15 +334,30 @@ def final_text(article: Path) -> str:
     return text.rstrip() + '\n'
 
 
+def role_gates(state: dict) -> dict:
+    """Structural gates come from the task's role snapshot, not a universal rule.
+
+    Old tasks without a snapshot fall back to the current definition of their
+    perspective, which keeps the historical gates for blogger/tech/product.
+    """
+    profile = state.get('writer_profile')
+    if not profile:
+        profile = writer_roles.profile_for(preferences.task_perspective(state))
+    return dict(writer_roles.GATE_DEFAULTS, **(profile.get('gates') or {}))
+
+
 def proof(article: Path, step: str) -> str:
     if step == 'search':
-        sources(article)
+        sources(article, required=role_gates(load(article))['sources_required'])
         return file_hash(layout.existing(article, 'sources.json'))
     if step == 'analysis':
+        gates = role_gates(load(article))
         text = body(layout.existing(article, 'analysis.md'))
         references = re.findall(r'\bsource:([A-Za-z0-9_-]+)', text)
-        ids = {item['id'] for item in sources(article)}
-        if not references or not set(references).issubset(ids):
+        ids = {item['id'] for item in sources(article, required=gates['sources_required'])}
+        if not set(references).issubset(ids):
+            raise ValueError('analysis.md 不能引用未知来源')
+        if gates['source_citations_required'] and not references:
             raise ValueError('analysis.md 需用 source:<id> 关联已有来源，不能引用未知来源')
         return file_hash(layout.existing(article, 'analysis.md'))
     if step == 'draft':

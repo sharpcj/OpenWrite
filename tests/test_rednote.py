@@ -197,8 +197,10 @@ class RednotePipelineTests(unittest.TestCase):
     def test_cli_seventh_stage_reports_publish_ready(self):
         project = self.article / 'project'
         project.mkdir()
-        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py'):
+        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py',
+                     'writer_roles.py'):
             shutil.copy2(ROOT / name, project / name)
+        shutil.copytree(ROOT / 'writer_roles', project / 'writer_roles')
         shutil.copytree(ROOT / 'skills', project / 'skills')
         (project / 'openwrite.yaml').write_text('wechat:\n  accounts:\n    主号: {}\n', encoding='utf-8')
         article = project / 'articles/note'

@@ -10,7 +10,7 @@ OpenWrite 的流程秩序是平台中立的，产物形态按平台分派。本�
 
 ## 注册表
 
-唯一位置为根目录 `platforms.py` 的 `REGISTRY`。控制器（`workflow.py`）与命令入口（`openwrite.py`）只读这张表。
+唯一位置为根目录 `platforms.py` 的 `REGISTRY`。控制器（`workflow.py`）与命令入口（`openwrite.py`）只读这张表。视角 → 写作 Skill 的路由不在注册表内，由角色预设 `writer_roles/*.yaml` 的 `skills` 字段声明（见 [选择规则](task-selection.md)）。
 
 | 字段 | 含义 |
 |---|---|
@@ -18,7 +18,6 @@ OpenWrite 的流程秩序是平台中立的，产物形态按平台分派。本�
 | `implemented` | 写作→可发布产物的适配器是否已实现；`false` 时可选择并记录，但所有门禁拒绝推进 |
 | `publish_implemented` | 上传适配器是否已实现；与 `implemented` 独立，可发布产物就绪不等于存在上传路径 |
 | `format_label` | 第七步的平台化名称（当前均为「生成可发布交付件」） |
-| `writers` | 视角 → 写作 Skill 名 |
 | `renderer` / `publisher` / `publisher_entry` | 渲染与发布 Skill 及入口脚本 |
 | `markdown_artifact` | 第六步整合产物名 |
 | `rendered_artifact` | 第七步渲染产物名；组图类平台为 `null` |
@@ -93,7 +92,7 @@ def render_<platform>(directory: Path, state: dict, args: argparse.Namespace, st
 ## 新增平台接入清单
 
 1. 在 `platforms.REGISTRY` 增加条目，先置 `implemented: false`，写入已核实规格。
-2. 实现写作 Skill（或复用现有视角 Skill + 平台表达规格）。
+2. 在 `writer_roles/` 增加或复用视角预设，`skills` 声明该平台的写作 Skill（专属 Skill 或通用 `openwrite-generic-writer`）。
 3. 渲染二选一：单文件产物 → 实现渲染函数并注册到 `openwrite.RENDERERS`；组图产物 → 复用 `openwrite-images` 的 `html` 后端，置 `rendered_artifact: null`。
 4. 实现发布 Skill，登记 `publisher` 与 `publisher_entry`，并置 `publish_implemented: true`。
 5. 在 `preferences` 增加平台键与凭证键；`setup` 模板（`openwrite.example.yaml`）补占位项。

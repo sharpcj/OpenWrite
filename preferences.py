@@ -25,10 +25,12 @@ import tempfile
 
 import yaml
 
+import writer_roles
+
 PLATFORMS = {'WeChat': 'wechat', 'Rednote': 'rednote'}
-PERSPECTIVES = {'SelfMediaBlogger': 'blogger', 'TechWriter': 'tech', 'ProductManager': 'product'}
 PLATFORM_LABELS = {'wechat': '微信', 'rednote': '小红书'}
-PERSPECTIVE_LABELS = {'blogger': '自媒体博主', 'tech': '技术作者', 'product': '产品经理'}
+# 视角枚举来自 writer_roles/ 预设文件；增删改 YAML 即增删改可选视角。
+PERSPECTIVE_LABELS = writer_roles.labels()
 
 TEMPLATE_NAME = 'openwrite.example.yaml'
 CONFIG_NAME = 'openwrite.yaml'
@@ -56,13 +58,13 @@ class ChoiceRequired(ValueError):
 
 
 def _normalize_role(raw, where: str) -> str:
-    """Accept perspective ids and legacy role labels, case-insensitively."""
+    """Accept perspective ids, display names and legacy role labels, case-insensitively."""
     text = str(raw).strip()
-    for label, perspective in PERSPECTIVES.items():
-        if text.casefold() in (label.casefold(), perspective):
-            return perspective
-    raise ValueError(f'{where} 的 writer_role 只能为 {" / ".join(PERSPECTIVES.values())}'
-                     f'（或 {" / ".join(PERSPECTIVES)}，当前：{text}）')
+    try:
+        return writer_roles.resolve_role(text)
+    except ValueError:
+        raise ValueError(f'{where} 的 writer_role 只能为 {" / ".join(writer_roles.list_roles())}'
+                         f'（或对应名称/别名，当前：{text}）') from None
 
 
 def _string(value, where: str) -> str:

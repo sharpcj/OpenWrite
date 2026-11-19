@@ -2,8 +2,10 @@
 
 The workflow controller reads this table instead of hard-coding one platform.
 Shared order (seven stages, fingerprints, gates) stays platform-neutral; product
-shape, limits and skill wiring are data here. Adding a platform means registering
-its specs plus its renderer/publisher skills, not copying the controller.
+shape and limits are data here. Writing-skill wiring lives in the writer role
+presets (``writer_roles/*.yaml``), so adding a perspective is a data change.
+Adding a platform means registering its specs plus its renderer/publisher
+skills, not copying the controller.
 
 `implemented` is deliberately explicit: a platform may be selectable and persisted
 long before its writing/rendering/publishing adapters exist.
@@ -11,6 +13,7 @@ long before its writing/rendering/publishing adapters exist.
 from __future__ import annotations
 
 import preferences
+import writer_roles
 
 WECHAT = 'wechat'
 REDNOTE = 'rednote'
@@ -19,11 +22,6 @@ REGISTRY = {
     WECHAT: {
         'label': '微信',
         'implemented': True,
-        'writers': {
-            'blogger': 'wechat-blogger-writer',
-            'tech': 'wechat-tech-writer',
-            'product': 'wechat-product-manager-writer',
-        },
         'renderer': 'wechat-article-formatter',
         'publisher': 'wechat-draft-publisher',
         'publisher_entry': 'publisher.py',
@@ -52,7 +50,6 @@ REGISTRY = {
         # P1：写作、卡片产物与发布适配器均已实现；发布默认仅自己可见。
         'implemented': True,
         'publish_implemented': True,
-        'writers': {'blogger': 'rednote-note-writer'},
         # 方案 A：卡片渲染是图片后端（html），不是独立的第七步排版器。
         'renderer': 'openwrite-images',
         'publisher': 'rednote-publisher',
@@ -127,10 +124,11 @@ def step_labels(state: dict) -> tuple:
 def writer_skill(state: dict) -> str:
     profile = for_state(state)
     perspective = preferences.task_perspective(state)
-    writers = profile['writers']
-    if perspective not in writers:
+    role = writer_roles.load_role(perspective)
+    skill = role['skills'].get(preferences.task_platform(state))
+    if not skill:
         raise ValueError(f'{profile["label"]}平台尚未适配 {perspective} 写作视角')
-    return writers[perspective]
+    return skill
 
 
 def limits(state: dict) -> dict:

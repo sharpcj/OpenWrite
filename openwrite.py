@@ -16,6 +16,7 @@ import sys
 import workflow
 import platforms
 import preferences
+import writer_roles
 
 ROOT = Path(__file__).resolve().parent
 SKILLS = ROOT / 'skills'
@@ -27,10 +28,14 @@ def _registered_skills() -> tuple:
     for profile in platforms.REGISTRY.values():
         if not profile['implemented']:
             continue
-        names.extend(profile['writers'].values())
         names.append(profile['renderer'])
         if profile.get('publish_implemented'):
             names.append(profile['publisher'])
+    # 写作 Skill 接线来自角色预设；只登记已实现平台引用的 Skill。
+    for role in writer_roles.list_roles():
+        for platform, skill in writer_roles.load_role(role)['skills'].items():
+            if platforms.REGISTRY.get(platform, {}).get('implemented'):
+                names.append(skill)
     return tuple(dict.fromkeys(names))
 
 
@@ -61,11 +66,13 @@ def new_article(args: argparse.Namespace) -> int:
     platform_label = preferences.PLATFORM_LABELS[selection['platform']]
     checkpoint = outline_checkpoint(args, selection)
     account_line = f'- 账号：{selection["account"]}\n' if selection.get('account') else ''
+    role_constraints = writer_roles.profile_for(selection['perspective'])['constraints']
     (layout.path(directory, 'brief.md')).write_text(
         f'# 创作需求\n\n- 主题：{title}\n- 平台：{platform_label}\n- 视角：{perspective}\n'
         f'{account_line}'
         f'- 标题与大纲确认：{"需要用户确认" if checkpoint else "用户已授权跳过"}\n'
         '- 受众：待根据任务补充\n- 当前阶段：工作区已创建，正文待写\n'
+        f'\n## 写作约束（角色预设）\n\n{role_constraints}\n'
         '\n## 用户要求\n\n## 资料与事实依据\n\n## 配图提示词与待办\n',
         encoding='utf-8',
     )

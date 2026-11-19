@@ -7,6 +7,8 @@ description: 从自媒体博主视角创作微信公众号文章，研究主题�
 
 本技能是项目默认写作视角，适用于已确定为微信平台的任务。平台、视角以任务状态为准，不根据主题词自行切换视角。遵循 [七步工作流](../../docs/workflow.md)，配图采用 [交接协议](../../docs/image-contract.md)。
 
+写作约束以任务的角色预设为准：`process/brief.md` 的「写作约束（角色预设）」与 `workflow.json.writer_profile` 快照（来自 `writer_roles/blogger.yaml`）优先于本 Skill 的通用建议（含篇幅）；预设调整时按新预设执行。
+
 ## 写作原则
 
 - 围绕读者的一个具体问题展开，明确读完能得到什么。

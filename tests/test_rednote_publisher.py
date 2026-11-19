@@ -58,6 +58,8 @@ class PublishNoteTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.project = Path(self.tmp.name).resolve()
         shutil.copy2(ROOT / 'preferences.py', self.project / 'preferences.py')
+        shutil.copy2(ROOT / 'writer_roles.py', self.project / 'writer_roles.py')
+        shutil.copytree(ROOT / 'writer_roles', self.project / 'writer_roles', dirs_exist_ok=True)
         (self.project / 'openwrite.yaml').write_text(
             f'rednote:\n  accounts:\n    主账号:\n      cookie: "{COOKIE}"\n', encoding='utf-8')
         self.article = self.project / 'article'
@@ -125,6 +127,8 @@ class PublishUiTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.project = Path(self.tmp.name).resolve()
         shutil.copy2(ROOT / 'preferences.py', self.project / 'preferences.py')
+        shutil.copy2(ROOT / 'writer_roles.py', self.project / 'writer_roles.py')
+        shutil.copytree(ROOT / 'writer_roles', self.project / 'writer_roles', dirs_exist_ok=True)
         (self.project / 'openwrite.yaml').write_text(
             f'rednote:\n  accounts:\n    主账号:\n      cookie: "{COOKIE}"\n', encoding='utf-8')
         self.article = self.project / 'article'
@@ -171,8 +175,10 @@ class PublishCliTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix='openwrite-rednote-cli-')
         self.addCleanup(self.tmp.cleanup)
         self.project = Path(self.tmp.name).resolve()
-        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py'):
+        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py',
+                     'writer_roles.py'):
             shutil.copy2(ROOT / name, self.project / name)
+        shutil.copytree(ROOT / 'writer_roles', self.project / 'writer_roles')
         shutil.copytree(ROOT / 'skills', self.project / 'skills')
         (self.project / 'openwrite.yaml').write_text(
             'wechat:\n  accounts:\n    主号: {}\n', encoding='utf-8')

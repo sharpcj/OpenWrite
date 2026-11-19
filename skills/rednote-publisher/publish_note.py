@@ -40,6 +40,9 @@ def load_preferences(root: Path):
     path = root / 'preferences.py'
     if not path.is_file():
         raise FileNotFoundError(f'找不到项目配置模块: {path}')
+    # preferences 依赖同级模块（如 writer_roles）；保证项目根在导入路径上。
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
     spec = importlib.util.spec_from_file_location('openwrite_preferences', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

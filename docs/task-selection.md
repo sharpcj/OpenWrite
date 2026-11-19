@@ -4,7 +4,7 @@
 
 ```yaml
 defaults:
-  writer_role: blogger        # blogger / tech / product
+  writer_role: blogger        # blogger / tech / product / news / novelist
   outline_approval: true
 
 wechat:
@@ -30,7 +30,7 @@ rednote:
       cookie: ""
 ```
 
-平台节为 `wechat` / `rednote`。每个账号可用可选 `name` 填写公众号名/账号名，便于识别；`--account` 与任务快照使用的是账号键名（如 `账号1`、`账号2`），不是 `name`。视角 `defaults.writer_role` 单选：`blogger`（自媒体博主）、`tech`（技术作者）、`product`（产品经理），也接受旧标签 `SelfMediaBlogger` / `TechWriter` / `ProductManager`（大小写不敏感）；缺省或留空默认 `blogger`。微信账号可用 `writer_role` 覆盖全局视角；小红书仅支持 `blogger`，账号不接受该字段。
+平台节为 `wechat` / `rednote`。每个账号可用可选 `name` 填写公众号名/账号名，便于识别；`--account` 与任务快照使用的是账号键名（如 `账号1`、`账号2`），不是 `name`。视角 `defaults.writer_role` 单选：`blogger`（自媒体博主）、`tech`（技术作者）、`product`（产品经理）、`news`（新闻记者）、`novelist`（小说家），也接受名称与旧标签 `SelfMediaBlogger` / `TechWriter` / `ProductManager` / `NewsReporter` / `Novelist`（大小写不敏感）；缺省或留空默认 `blogger`。视角是数据驱动预设：根目录 `writer_roles/<视角>.yaml` 声明显示名、别名、写作约束（软）、结构门禁开关与分平台写作 Skill 路由，增删改文件即增删改可选视角。微信账号可用 `writer_role` 覆盖全局视角；小红书仅支持 `blogger`，账号不接受该字段。
 
 ## 新任务优先级
 
@@ -78,7 +78,7 @@ Agent 负责理解用户提示词的明确意图，转换为命令参数。不�
 
 ## 任务内持久化
 
-选择确定后写入 `workflow.json` 的 `platform`、`account`、`perspective` 和 `selection_source`。`selection_source` 分别记录选择来自 `explicit`（用户明确选择或用户提示词经 Agent 转换的参数）、`config`（配置值）还是 `default`（视角缺省时的内置默认）。`brief.md` 同时显示平台、账号和视角。
+选择确定后写入 `workflow.json` 的 `platform`、`account`、`perspective` 和 `selection_source`。`selection_source` 分别记录选择来自 `explicit`（用户明确选择或用户提示词经 Agent 转换的参数）、`config`（配置值）还是 `default`（视角缺省时的内置默认）。角色预设同时快照为 `writer_profile`（名称、写作约束、门禁开关），写作约束写入 `brief.md` 的「写作约束（角色预设）」；门禁读快照，后续修改预设文件不改写已有任务的规则。`brief.md` 同时显示平台、账号和视角。
 
 继续同一任务使用这些已保存的选择，不再读取当前默认配置来覆盖任务；`workflow status` 会显示平台、账号和视角。发布时按任务保存的 `account` 取对应凭证，多账号不串用。修改 `openwrite.yaml` 只影响后续新任务，不回写或改变已有任务；修改 `openwrite.example.yaml` 模板不影响任何运行行为。若要制作不同平台、账号或视角的版本，应新建对应任务。
 
@@ -86,7 +86,7 @@ Agent 负责理解用户提示词的明确意图，转换为命令参数。不�
 
 ## 视角与能力
 
-微信支持 `blogger` / `tech` / `product`，小红书目前只支持 `blogger`。遇到配置或明确参数产生的不支持组合时，说明限制并取得用户明确选择，不静默覆盖视角或平台。默认博主视角不因主题涉及技术或产品自动切换。写作 Skill 路由统一见 [Agent 指南](../AGENT_GUIDE.md#按阶段读取-skill)。
+微信支持 `blogger` / `tech` / `product` / `news` / `novelist`，小红书目前只支持 `blogger`。遇到配置或明确参数产生的不支持组合时，说明限制并取得用户明确选择，不静默覆盖视角或平台。默认博主视角不因主题涉及技术或产品自动切换。写作 Skill 路由统一见 [Agent 指南](../AGENT_GUIDE.md#按阶段读取-skill)。
 
 写作流程检查点也由配置控制：`defaults.outline_approval: true`（默认）要求分析后、写正文前取得用户对三个备选标题与大纲的确认；设为 `false` 表示用户授权跳过；微信账号可用 `outline_approval` 覆盖。该值在 `new` / `workflow init` 时写入任务的 `outline_approval`，与平台、账号、视角一样不随后续配置修改而改变；单次任务也可用 `--skip-outline` 显式授权跳过。
 

@@ -36,8 +36,10 @@ class FormatThemeTests(unittest.TestCase):
         self.config.write_text(CONFIG, encoding='utf-8')
 
     def cli(self, *args):
-        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py'):
+        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py',
+                     'writer_roles.py'):
             shutil.copy2(ROOT / name, self.root / name)
+        shutil.copytree(ROOT / 'writer_roles', self.root / 'writer_roles', dirs_exist_ok=True)
         return subprocess.run([sys.executable, '-B', str(self.root / 'openwrite.py'), *args],
                               cwd=self.root, capture_output=True, text=True)
 

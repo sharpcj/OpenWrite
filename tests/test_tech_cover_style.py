@@ -80,8 +80,10 @@ class TechCoverStyleTests(unittest.TestCase):
         # Isolated CLI checkout: no private configuration, no live services.
         cli_root = self.root / 'checkout'
         cli_root.mkdir()
-        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py'):
+        for name in ('openwrite.py', 'workflow.py', 'preferences.py', 'platforms.py', 'layout.py',
+                     'writer_roles.py'):
             shutil.copy2(ROOT / name, cli_root / name)
+        shutil.copytree(ROOT / 'writer_roles', cli_root / 'writer_roles')
         shutil.copytree(ROOT / 'skills', cli_root / 'skills',
                         ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*token*', '.env*'))
         (cli_root / 'openwrite.yaml').write_text('wechat:\n  accounts:\n    demo: {}\n', encoding='utf-8')

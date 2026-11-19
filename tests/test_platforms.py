@@ -8,6 +8,7 @@ import unittest
 import platforms
 import preferences
 import workflow
+import writer_roles
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,7 +20,7 @@ class RegistryTests(unittest.TestCase):
             with self.subTest(platform=name):
                 self.assertEqual(profile['label'], preferences.PLATFORM_LABELS[name])
                 for key in ('renderer', 'publisher', 'publisher_entry', 'markdown_artifact',
-                            'artifacts', 'cover', 'content_images', 'limits', 'checks', 'writers'):
+                            'artifacts', 'cover', 'content_images', 'limits', 'checks'):
                     self.assertIn(key, profile)
 
     def test_wechat_specs_match_the_previous_hardcoded_limits(self):
@@ -69,7 +70,12 @@ class RegistryTests(unittest.TestCase):
         for name, profile in platforms.REGISTRY.items():
             if not profile['implemented']:
                 continue
-            skills = [profile['renderer'], *profile['writers'].values()]
+            skills = [profile['renderer']]
+            # 写作 Skill 接线来自角色预设。
+            for role in writer_roles.list_roles():
+                skill = writer_roles.load_role(role)['skills'].get(name)
+                if skill:
+                    skills.append(skill)
             if profile.get('publish_implemented'):
                 skills.append(profile['publisher'])
             for skill in skills:
@@ -85,6 +91,10 @@ class RegistryTests(unittest.TestCase):
                          'wechat-blogger-writer')
         self.assertEqual(platforms.writer_skill({'platform': 'wechat', 'perspective': 'product'}),
                          'wechat-product-manager-writer')
+        self.assertEqual(platforms.writer_skill({'platform': 'wechat', 'perspective': 'news'}),
+                         'openwrite-generic-writer')
+        self.assertEqual(platforms.writer_skill({'platform': 'wechat', 'perspective': 'novelist'}),
+                         'openwrite-generic-writer')
         self.assertEqual(platforms.writer_skill({'platform': 'rednote', 'perspective': 'blogger'}),
                          'rednote-note-writer')
         with self.assertRaises(ValueError):
