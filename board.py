@@ -20,6 +20,7 @@ import layout
 
 from datetime import datetime
 from functools import partial
+import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -29,6 +30,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from urllib.parse import parse_qs, unquote, urlparse
 import webbrowser
 
@@ -42,6 +44,21 @@ FILE_PATTERN = re.compile(r'[\w-]+\.(png|jpg|jpeg|html|md)')
 NAME_PATTERN = re.compile(r'[\w-]{1,100}')
 CONTENT_TYPES = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
                  '.html': 'text/html; charset=utf-8', '.md': 'text/plain; charset=utf-8'}
+# 看板是长驻进程，导入的代码不会随磁盘更新；指纹覆盖启动时导入的模块与角色预设。
+CODE_FILES = ('board.py', 'openwrite.py', 'workflow.py', 'preferences.py',
+              'platforms.py', 'layout.py', 'writer_roles.py')
+
+
+def code_fingerprint() -> str:
+    digest = hashlib.sha256()
+    for name in CODE_FILES:
+        path = ROOT / name
+        digest.update(path.read_bytes() if path.is_file() else b'')
+    roles = ROOT / 'writer_roles'
+    if roles.is_dir():
+        for path in sorted(roles.glob('*.yaml')):
+            digest.update(path.read_bytes())
+    return digest.hexdigest()
 
 
 def task_created(state: dict, path: Path) -> str:
@@ -308,6 +325,8 @@ class BoardHandler(BaseHTTPRequestHandler):
                 self._json(paginate(tasks, page))
             elif parsed.path == '/api/stats':
                 self._json(collect_stats(self.root))
+            elif parsed.path == '/api/version':
+                self._json({'fingerprint': getattr(self.server, 'board_fingerprint', '')})
             elif parsed.path.startswith('/api/task/'):
                 self._json(task_detail(self.root, unquote(parsed.path[len('/api/task/'):])))
             elif parsed.path.startswith('/files/'):
@@ -316,6 +335,8 @@ class BoardHandler(BaseHTTPRequestHandler):
                 self._send(404, 'text/plain; charset=utf-8', 'Not Found'.encode('utf-8'))
         except ValueError as exc:
             self._json({'error': str(exc)}, status=400)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # 探活客户端超时断开，不是服务错误
         except OSError as exc:
             self._json({'error': str(exc)}, status=500)
 
@@ -347,6 +368,7 @@ class BoardHandler(BaseHTTPRequestHandler):
 
 
 def serve(root: Path, port: int = 8765, open_browser: bool = True) -> None:
+    _restart_if_stale(port)
     try:
         server = ThreadingHTTPServer(('127.0.0.1', port), partial(BoardHandler, root=root))
     except OSError:
@@ -354,6 +376,7 @@ def serve(root: Path, port: int = 8765, open_browser: bool = True) -> None:
             print(f'端口 {port} 已有看板运行，复用现有实例，不重复启动')
             return
         raise
+    server.board_fingerprint = code_fingerprint()
     url = f'http://127.0.0.1:{server.server_address[1]}'
     pid_file = _pid_file(port)
     pid_file.write_text(str(os.getpid()), encoding='utf-8')
@@ -374,14 +397,38 @@ def _pid_file(port: int) -> Path:
     return Path(tempfile.gettempdir()) / f'openwrite-board-{port}.pid'
 
 
-def board_alive(port: int = 8765, timeout: float = 1.0) -> bool:
-    """Probe the JSON API so a foreign process on the port is not mistaken for us."""
+def board_alive(port: int = 8765, timeout: float = 3.0) -> bool:
+    """Probe the JSON API so a foreign process on the port is not mistaken for us.
+
+    /api/tasks 需聚合全部任务并哈希产物，任务多时较慢；超时须宽于一次完整聚合。
+    """
     from urllib.request import urlopen
     try:
         with urlopen(f'http://127.0.0.1:{port}/api/tasks', timeout=timeout) as response:
             return 'items' in json.loads(response.read())
     except (OSError, ValueError):
         return False
+
+
+def board_current(port: int, timeout: float = 1.0) -> bool:
+    """A live board is current only when its imported code matches this checkout.
+
+    旧进程没有 /api/version（404）或指纹不符都视为过期，需要重启才能读懂新配置与状态。
+    """
+    from urllib.request import urlopen
+    try:
+        with urlopen(f'http://127.0.0.1:{port}/api/version', timeout=timeout) as response:
+            return json.loads(response.read()).get('fingerprint') == code_fingerprint()
+    except (OSError, ValueError):
+        return False
+
+
+def _restart_if_stale(port: int) -> None:
+    if board_alive(port) and not board_current(port):
+        stop_board(port)
+        deadline = time.monotonic() + 3
+        while board_alive(port, timeout=1.0) and time.monotonic() < deadline:
+            time.sleep(0.1)
 
 
 def stop_board(port: int = 8765) -> bool:
@@ -401,16 +448,18 @@ def stop_board(port: int = 8765) -> bool:
 def ensure_board(port: int = 8765, open_browser: bool = True):
     """Start the board detached if absent; reuse a live one. Returns (url, started).
 
+    A live board whose imported code predates this checkout is stopped and
+    restarted, so config/schema changes never leave a stale server behind.
     A per-port file lock serializes probe+spawn so concurrent task starts never
     leave two live servers: the loser of a bind race exits gracefully in serve()
     and this call reports reuse. The winning child opens the browser itself.
     """
     import fcntl
-    import time
     url = f'http://127.0.0.1:{port}'
     lock_path = Path(tempfile.gettempdir()) / f'openwrite-board-{port}.lock'
     with open(lock_path, 'a+') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        _restart_if_stale(port)
         if board_alive(port):
             if open_browser:
                 webbrowser.open(url)
@@ -422,11 +471,11 @@ def ensure_board(port: int = 8765, open_browser: bool = True):
                 stdout=handle, stderr=handle, start_new_session=True)
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
-            if board_alive(port, timeout=0.5):
+            if board_alive(port, timeout=2.0):
                 break
             if process.poll() is not None:
                 break
             time.sleep(0.1)
-        if not board_alive(port, timeout=0.5):
+        if not board_alive(port, timeout=2.0):
             raise RuntimeError(f'看板启动失败，详见日志：{log}')
         return url, process.poll() is None

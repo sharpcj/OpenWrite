@@ -210,6 +210,7 @@ class BoardHttpTests(unittest.TestCase):
         make_task(cls.root, 'note', 'rednote', complete=True, created='2026-11-15T10:00:00+08:00')
         make_task(cls.root, 'draft', 'wechat', created='2026-11-10T10:00:00+08:00')
         cls.httpd = ThreadingHTTPServer(('127.0.0.1', 0), partial(board.BoardHandler, root=cls.root))
+        cls.httpd.board_fingerprint = board.code_fingerprint()
         cls.thread = threading.Thread(target=cls.httpd.serve_forever, daemon=True)
         cls.thread.start()
         cls.base = f'http://127.0.0.1:{cls.httpd.server_address[1]}'
@@ -228,6 +229,9 @@ class BoardHttpTests(unittest.TestCase):
         status, kind, body = self.get('/')
         self.assertEqual((status, kind), (200, 'text/html; charset=utf-8'))
         self.assertIn('实时故事板'.encode('utf-8'), body)
+        status, _, body = self.get('/api/version')
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)['fingerprint'], board.code_fingerprint())
         status, _, body = self.get('/api/tasks')
         data = json.loads(body)
         self.assertEqual(data['total'], 2)
@@ -323,6 +327,41 @@ class AutoStartTests(unittest.TestCase):
 
     def test_stop_without_running_board_reports_false(self):
         self.assertFalse(board.stop_board(self._free_port()))
+
+    def test_code_fingerprint_tracks_modules_and_role_presets(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory(prefix='openwrite-board-fp-') as tmp:
+            fake = Path(tmp)
+            (fake / 'board.py').write_text('# v1\n', encoding='utf-8')
+            with patch.object(board, 'ROOT', fake):
+                first = board.code_fingerprint()
+                self.assertEqual(first, board.code_fingerprint())
+                (fake / 'board.py').write_text('# v2\n', encoding='utf-8')
+                self.assertNotEqual(first, board.code_fingerprint())
+                (fake / 'writer_roles').mkdir()
+                (fake / 'writer_roles' / 'x.yaml').write_text('name: X\n', encoding='utf-8')
+                self.assertNotEqual(first, board.code_fingerprint())
+
+    def test_ensure_board_restarts_stale_code(self):
+        import time
+        from unittest.mock import patch
+        port = self._free_port()
+        url, started = board.ensure_board(port, open_browser=False)
+        self.assertTrue(started)
+        self.assertTrue(board.board_current(port))
+        # 模拟磁盘代码已更新：运行中的进程指纹落后，ensure_board 应停旧拉新。
+        with patch.object(board, 'code_fingerprint', return_value='newer-code'):
+            self.assertFalse(board.board_current(port))
+            url2, started2 = board.ensure_board(port, open_browser=False)
+        self.assertTrue(started2)
+        self.assertEqual(url2, url)
+        self.assertTrue(board.board_alive(port))
+        self.assertTrue(board.board_current(port))
+        self.assertTrue(board.stop_board(port))
+        deadline = time.monotonic() + 5
+        while board.board_alive(port) and time.monotonic() < deadline:
+            time.sleep(0.2)
+        self.assertFalse(board.board_alive(port))
 
     def test_ensure_board_starts_detached_and_stop_terminates(self):
         import time
