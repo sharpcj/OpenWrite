@@ -118,6 +118,20 @@ class FormatThemeTests(unittest.TestCase):
                 article=str(self.article), theme=None, no_preformat=True)), 0)
             self.assertEqual(workflow.require_publishable(self.article)['theme'], 'modern')
 
+    def test_format_renders_timeline_through_article_workflow(self):
+        workflow.initialize(self.article, '测试文章', perspective='news')
+        block = ':::timeline\n- 11 月 18 日 09:30 | 发布首份通报。\n:::'
+        finish_article(self.article, text=f'# 测试文章\n\n{block}\n\n后续情况。\n')
+        self.assertIn(block, (self.article / 'article.md').read_text(encoding='utf-8'))
+        with patch.object(workflow.preferences, 'credential_value', return_value=''):
+            self.assertEqual(cli.format_article(Namespace(
+                article=str(self.article), theme=None, no_preformat=False)), 0)
+        html = (self.article / 'article.html').read_text(encoding='utf-8')
+        self.assertIn('11 月 18 日 09:30', html)
+        self.assertIn('发布首份通报。', html)
+        self.assertNotIn(':::timeline', html)
+        self.assertEqual(workflow.require_publishable(self.article)['title'], '测试文章')
+
     def test_old_task_without_snapshot_uses_default(self):
         finish_article(self.article)
         with patch.object(workflow.preferences, 'credential_value', return_value=''):

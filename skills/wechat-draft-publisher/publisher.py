@@ -20,6 +20,16 @@ from typing import Optional, Dict, Any
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _decode_json(response):
+    """Parse a WeChat API response as UTF-8 explicitly.
+
+    requests falls back to ISO-8859-1 when the response has no charset,
+    which turns Chinese fields into mojibake and breaks read-back checks.
+    """
+    response.encoding = 'utf-8'
+    return response.json()
+
+
 def load_preferences():
     """加载项目配置模块，保持与 openwrite.py 相同的解析规则"""
     path = PROJECT_ROOT / 'preferences.py'
@@ -157,7 +167,7 @@ class WeChatPublisher:
         }
 
         response = requests.get(url, params=params)
-        result = response.json()
+        result = _decode_json(response)
 
         if 'errcode' in result:
             error_msg = self._handle_api_error(
@@ -214,7 +224,7 @@ class WeChatPublisher:
             files = {'media': (os.path.basename(image_path), f, 'image/jpeg')}
             response = requests.post(url, params=params, files=files)
 
-        result = response.json()
+        result = _decode_json(response)
 
         if 'errcode' in result and result['errcode'] != 0:
             error_msg = self._handle_api_error(
@@ -726,7 +736,7 @@ class WeChatPublisher:
         # 手动序列化JSON，确保中文不被转义
         data = json.dumps(articles, ensure_ascii=False).encode('utf-8')
         response = requests.post(url, data=data, headers=headers)
-        result = response.json()
+        result = _decode_json(response)
 
         if 'errcode' in result and result['errcode'] != 0:
             # 如果是token过期，尝试刷新token后重试
@@ -737,7 +747,7 @@ class WeChatPublisher:
                 url = f"{self.BASE_URL}/draft/add?access_token={token}"
                 data = json.dumps(articles, ensure_ascii=False).encode('utf-8')
                 response = requests.post(url, data=data, headers=headers)
-                result = response.json()
+                result = _decode_json(response)
 
                 if 'errcode' in result and result['errcode'] != 0:
                     error_msg = self._handle_api_error(
@@ -775,7 +785,7 @@ class WeChatPublisher:
             data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
             headers={'Content-Type': 'application/json; charset=utf-8'}, timeout=(10, 30))
         response.raise_for_status()
-        result = response.json()
+        result = _decode_json(response)
         if result.get('errcode', 0):
             # Only explicit token rejections prove no creation. Never replay add.
             if result['errcode'] in (40001, 42001):

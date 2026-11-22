@@ -120,6 +120,27 @@
 
 阶段推进与返工规则见 [七步工作流](workflow.md)。
 
+## 技术图绘制与导入
+
+微信正文需要自绘架构图、流程图、时序图等技术图时，第五步按需读取 [diagram-builder](../skills/diagram-builder/SKILL.md#openwrite-正文配图)。此路径适用于所有微信写作视角。按正文和资料核对节点、关系、箭头方向和标签，使用已有配图需求的尺寸与插入位置。
+
+1. 为该图登记 `role: content`、`id`、`output`、尺寸、`placement` 和 `alt`，并在 `workflow/content-images.json` 记录正文需要配图。
+2. 在任务的 `process/` 保存独立 SVG。根元素包含 SVG 命名空间，`width`、`height` 与目标像素尺寸一致，`viewBox` 比例一致。将中文字体、颜色、箭头和背景定义在 SVG 中。需要后续维护 Mermaid 时，可把 `.mmd` 源文件一并保留在 `process/`。
+3. 用本机 Playwright Chromium 导出同尺寸 PNG。浏览器安装见 [环境与运行](setup.md#小红书浏览器依赖)。下面以 `id: diagram`、目标尺寸 1024×768 为例，从项目根目录运行：
+
+   ```bash
+   .venv/bin/python skills/diagram-builder/scripts/check_svg_text.py articles/my-topic/process/diagram.svg
+   .venv/bin/python -m playwright screenshot --viewport-size 1024,768 \
+     "file://${PWD}/articles/my-topic/process/diagram.svg" articles/my-topic/process/diagram-render.png
+   ```
+
+4. 目视检查导出的中文、节点边界、连线、箭头和画布留白，确认手机宽度下可读，再用现有文件后端导入。导入后查看文章目录中的实际产物，按正文配图阶段记录验收。
+
+   ```bash
+   .venv/bin/python openwrite.py image articles/my-topic --id diagram --backend file \
+     --source articles/my-topic/process/diagram-render.png --fit exact
+   ```
+
 ## 微信封面三维样式
 
 项目 `openwrite.yaml` 中任务账号的封面版式、视觉风格、色调在创建任务时存入 `workflow.json.cover_style`。独立图片能力将该快照解析为有效需求，工作流使用同一有效需求校验指纹。写作侧应以快照为准，不在画面描述中写入冲突的风格和构图。左文右图底图留白，标题和关键词句通过 `overlay` 叠字，`text` 置空。原始需求文件保留，实际执行需求由解析器统一确定。详见 [封面样式](cover-style.md)。

@@ -37,7 +37,9 @@ OpenWrite 支持微信公众号与小红书图文创作，Skill 位于项目 `sk
 | 微信 `product` | [wechat-product-manager-writer](skills/wechat-product-manager-writer/SKILL.md) |
 | 微信 `news` / `novelist` | [openwrite-generic-writer](skills/openwrite-generic-writer/SKILL.md)（角色约束驱动） |
 | 小红书图文 | [rednote-note-writer](skills/rednote-note-writer/SKILL.md) |
+| 微信与小红书中文稿审校（所有写作视角，第三步提交前默认执行） | [humanizer-zh-pro](skills/humanizer-zh-pro/SKILL.md)，按 [中文稿审校](docs/workflow.md#中文稿审校) 执行 |
 | 生成、替换或导入图片，含卡片渲染 | [openwrite-images](skills/openwrite-images/SKILL.md) |
+| 微信正文需要自绘架构图、流程图、时序图等技术图时（所有写作视角，第五步按需读取） | [diagram-builder](skills/diagram-builder/SKILL.md#openwrite-正文配图) |
 | 微信第四步封面版式与设计预设 | [wechat-cover-designer](skills/wechat-cover-designer/SKILL.md) |
 | 微信第七步排版 | [wechat-article-formatter](skills/wechat-article-formatter/SKILL.md) |
 | 上传微信草稿 | [wechat-draft-publisher](skills/wechat-draft-publisher/SKILL.md) |
@@ -61,6 +63,7 @@ OpenWrite 支持微信公众号与小红书图文创作，Skill 位于项目 `sk
 
 - 搜索保存来源及实际提取内容，分析使用 `source:<id>` 关联来源。事实与数据须有依据，不把虚构经历写成作者真实体验。
 - 分析后、全文前执行标题与大纲检查点：除非任务已授权跳过，先给出三个候选标题（含 `激进悬念`、`客观中性`，第三个默认 `利益实用`）和大纲，等用户选定标题并确认。每轮更新 `process/outline.md`，确认后写入 `workflow/outline.json`；未确认不写全文，草稿 H1 与确认标题一致。结构化记录及开关规则见 [检查点协议](docs/workflow.md#标题与大纲检查点)。
+- 微信正文需要按时间交代多个事件、阶段或里程碑时，所有写作视角统一在 `process/draft.md` 中使用 [正文时间线区块](skills/wechat-article-formatter/SKILL.md#正文时间线)，日期或时刻与事件逐条填写，不使用表格承载时间线。事实类内容只写来源可确认的时间精度。
 - 图片阶段只有取得实际图片并完成视觉验收后才提交；不能把需求文件或 `ready` 状态当作验收通过。具体职责见下一节。
 - 第六步必须用 `workflow finalize` 整合 Markdown，不能另写最终正文绕过控制器。第七步用 `format` 校验并写入 `workflow/publish-manifest.json`。
 - 正文、需求或已完成产物变化后，先 `workflow reset --from <最早受影响步骤>`，再重做下游；文件保留，状态失效。正文变化后复核封面与正文图是否匹配，复用图片也需重新验收。操作见 [返工与恢复](docs/workflow.md#返工与恢复)。

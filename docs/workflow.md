@@ -125,6 +125,22 @@
 
 是否启用由 `openwrite.yaml` 的 `defaults.outline_approval` 控制（默认 `true`，微信账号可在 `accounts.<账号名>` 下逐项覆盖）；用户明确授权跳过时可传 `new --skip-outline` 或 `workflow init --skip-outline`。选择在创建任务时写入 `outline_approval`，之后修改配置不影响已有任务。旧任务没有该字段时不追加此要求。
 
+## 中文稿审校
+
+微信和小红书的中文稿件默认在第三步完成初稿后、提交 `workflow complete --step draft` 前，由 Agent 读取 [humanizer-zh-pro](../skills/humanizer-zh-pro/SKILL.md) 并审校。适用于所有写作视角，沿用平台写作规则、任务约束与已确认的标题和大纲。用户要求保留原文，或相关段落属于规范文本、正式引文等不宜改写的内容时，保留原样。
+
+1. 审读 `process/draft.md` 的可编辑正文。小红书同步审读 `process/cards.md` 中面向读者的文案，核对笔记与卡片表达一致。
+2. 按语境处理空泛铺垫、重复总结、夸饰、机械排比和对话残留。保留有表达作用的修辞、作者语气与立场，不编造亲历、观点或来源。
+3. 保存前与初稿对照，核对事实、数字、日期、专名、归因、引用和链接。保留已确认的 H1、代码和命令、Markdown 结构、`:::timeline` 节点的时间与顺序，以及小红书话题与卡片分页结构。审校意见留在过程沟通中，最终稿只保留面向读者的内容。
+
+需要候选线索时，可在项目根目录运行本地只读扫描。命中项逐条按语境复核，分数与退出码仅用于提示，不构成工作流门禁。短文案、代码、引文及结构化标记优先用人工审读。
+
+```bash
+.venv/bin/python skills/humanizer-zh-pro/scripts/check_tells.py articles/rag-guide/process/draft.md --only warn
+```
+
+对已提交的旧稿，用户明确要求润色时先查看任务状态。若要改动已完成的正文或卡片稿，先 `workflow reset --from draft`，再编辑源稿并按现有流程重做受影响的下游阶段。确认过的标题与大纲内容保持时，沿用原确认记录。最终 Markdown 由 `workflow finalize` 重新生成。
+
 ## 封面与正文配图
 
 写作 Skill 按 [配图交接协议](image-contract.md) 定义需求。项目图片命令在 `cover` 阶段只允许处理封面，在 `content` 阶段只允许处理正文图片；独立图片能力的后端实现保持解耦。

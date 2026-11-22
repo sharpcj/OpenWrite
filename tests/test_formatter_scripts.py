@@ -90,6 +90,33 @@ class ConvertFunctionTests(unittest.TestCase):
         self.assertIn('#A93226', html)
         self.assertIn('关注', html)
 
+    def test_timeline_renders_between_paragraphs(self):
+        markdown = ('# 标题\n\n事件背景。\n\n'
+                    ':::timeline\n'
+                    '- 11 月 18 日 09:30 | 首次通报 <更正>。\n'
+                    '- 11 月 21 日 | 后续安排 | 补充说明。\n'
+                    ':::\n\n接下来是分析。')
+        html = core.convert_markdown(markdown, 'blueprint-tech')
+        sections = ['事件背景。', 'border-left:2px solid #667eea;', '11 月 18 日 09:30',
+                    '首次通报 &lt;更正&gt;。', '11 月 21 日', '后续安排 | 补充说明。', '接下来是分析。']
+        offsets = [html.index(section) for section in sections]
+        self.assertEqual(offsets, sorted(offsets))
+        self.assertEqual(html.count('border-radius:50%;'), 2)
+        self.assertNotIn(':::timeline', html)
+        self.assertNotIn('<table', html)
+
+    def test_timeline_validation_and_literal_code(self):
+        for block, error in (
+            (':::timeline\n:::', '至少需要一个节点'),
+            (':::timeline\n- 11 月 18 日 |\n:::', '第 2 行'),
+            (':::timeline\n- 11 月 18 日 | 通报。', '缺少结束标记'),
+        ):
+            with self.subTest(block=block), self.assertRaisesRegex(ValueError, error):
+                core.convert_markdown(block)
+        html = core.convert_markdown('```markdown\n:::timeline\n:::\n```')
+        self.assertIn(':::timeline', html)
+        self.assertNotIn('border-radius:50%;', html)
+
     def test_unknown_theme_is_reported(self):
         with self.assertRaises(SystemExit):
             core.convert_markdown(SAMPLE, 'no-such-theme')

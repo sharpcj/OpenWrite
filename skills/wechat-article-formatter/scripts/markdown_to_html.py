@@ -186,6 +186,40 @@ def _preformat_markdown(text: str) -> str:
 
 # ── Markdown → HTML ──────────────────────────────────────────
 
+def _render_timeline(lines, start_line: int, styles: dict) -> str:
+    accent = styles["primary-color"]
+    axis_style = f'margin:1.2em 0; padding-left:15px; border-left:2px solid {accent};'
+    time_style = f'margin:0; color:{accent}; font-size:14px; font-weight:bold;'
+    event_style = (
+        f'margin:4px 0 0; font-size:{styles["font-size"]}; '
+        f'line-height:{styles["line-height"]}; color:{styles["text-color"]};'
+    )
+    marker = (
+        f'<span aria-hidden="true" style="display:inline-block; width:8px; height:8px; '
+        f'margin-left:-20px; margin-right:12px; border-radius:50%; '
+        f'background-color:{accent}; vertical-align:middle;"></span>'
+    )
+    nodes = []
+    for line_number, line in lines:
+        stripped = line.strip()
+        if stripped == ":::":
+            if not nodes:
+                raise ValueError(f"第 {start_line} 行的时间线至少需要一个节点")
+            return f'<section style="{axis_style}">' + "".join(nodes) + "</section>"
+        if not stripped:
+            continue
+        match = re.fullmatch(r"-\s+([^|]+)\|(.*)", stripped)
+        if not match or not all(part.strip() for part in match.groups()):
+            raise ValueError(f"第 {line_number} 行的时间线节点应写为 `- 时间 | 事件`")
+        timestamp, event = (html_mod.escape(part.strip()) for part in match.groups())
+        spacing = ' style="margin-top:14px;"' if nodes else ""
+        nodes.append(
+            f'<section{spacing}><p style="{time_style}">{marker}{timestamp}</p>'
+            f'<p style="{event_style}">{event}</p></section>'
+        )
+    raise ValueError(f"第 {start_line} 行的时间线缺少结束标记 `:::`")
+
+
 def _md_to_html(md_text: str, styles: dict) -> str:
     lines = md_text.strip().split("\n")
     html_parts = []
@@ -229,7 +263,8 @@ def _md_to_html(md_text: str, styles: dict) -> str:
             html_parts.append("</blockquote>")
             in_blockquote = False
 
-    for line in lines:
+    line_iterator = enumerate(lines, start=1)
+    for line_number, line in line_iterator:
         stripped = line.strip()
 
         # 围栏代码块
@@ -256,6 +291,13 @@ def _md_to_html(md_text: str, styles: dict) -> str:
 
         if in_code_block:
             code_block_lines.append(line)
+            continue
+
+        if stripped == ":::timeline":
+            flush_paragraph()
+            close_list()
+            close_blockquote()
+            html_parts.append(_render_timeline(line_iterator, line_number, styles))
             continue
 
         if not stripped:
@@ -580,8 +622,11 @@ def main():
         _info(f"已追加文末区块: {closing_md_path}")
 
     _info(f"主题: {args.theme}")
-    full_html = convert_markdown(md_text, args.theme, overrides,
-                                 preformat=not args.no_preformat, closing_md=closing_md)
+    try:
+        full_html = convert_markdown(md_text, args.theme, overrides,
+                                     preformat=not args.no_preformat, closing_md=closing_md)
+    except ValueError as exc:
+        _err(str(exc))
     if not args.no_preformat:
         _info("Markdown 预格式化完成（中英文间距、引号、空行）")
 
